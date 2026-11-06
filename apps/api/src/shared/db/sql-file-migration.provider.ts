@@ -4,12 +4,18 @@ import { join } from 'node:path';
 import { sql, type Kysely } from 'kysely';
 import type { Migration, MigrationProvider } from 'kysely/migration';
 
+import { splitSqlStatements } from './split-sql-statements.js';
+
 const UP_SUFFIX = '.up.sql';
 const DOWN_SUFFIX = '.down.sql';
 
 function createSqlMigration(script: string): (db: Kysely<unknown>) => Promise<void> {
+  const statements = splitSqlStatements(script);
+
   return async (db) => {
-    await sql.raw(script).execute(db);
+    for (const statement of statements) {
+      await sql.raw(statement).execute(db);
+    }
   };
 }
 

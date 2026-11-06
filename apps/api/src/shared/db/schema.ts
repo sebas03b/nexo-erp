@@ -1,4 +1,4 @@
-import type { Generated } from 'kysely';
+import type { ColumnType, Generated } from 'kysely';
 
 export interface UsuariosTable {
   id: Generated<string>;
@@ -16,7 +16,17 @@ export interface ClientesTable {
   canal_preferido: string | null;
 }
 
+export interface OutboxEventsTable {
+  id: Generated<string>;
+  correlation_id: string;
+  tipo: string;
+  payload: ColumnType<object, string, string>;
+  creado_en: Generated<Date>;
+  procesado_en: Date | null;
+}
+
 export interface Database {
   usuarios: UsuariosTable;
   clientes: ClientesTable;
+  outbox_events: OutboxEventsTable;
 }

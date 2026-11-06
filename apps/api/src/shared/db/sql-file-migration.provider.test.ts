@@ -13,9 +13,9 @@ describe('SqlFileMigrationProvider', () => {
     const provider = new SqlFileMigrationProvider(MIGRATIONS_DIRECTORY);
 
     const migrations = await provider.getMigrations();
-    const initialMigration = migrations['0001_initial_schema'];
 
-    expect(typeof initialMigration?.up).toBe('function');
-    expect(typeof initialMigration?.down).toBe('function');
+    expect(Object.keys(migrations)).toEqual(['0001_initial_schema', '0002_outbox_events']);
+    expect(typeof migrations['0002_outbox_events']?.up).toBe('function');
+    expect(typeof migrations['0002_outbox_events']?.down).toBe('function');
   });
 });

@@ -1,15 +1,9 @@
-import { Kysely, PostgresDialect } from 'kysely';
-import { Pool } from 'pg';
+import type { Kysely } from 'kysely';
 
 import { env } from '../../config/env.js';
+import { createDatabasePool } from './pool.js';
 import type { Database } from './schema.js';
 
 export function createDatabase(): Kysely<Database> {
-  return new Kysely<Database>({
-    dialect: new PostgresDialect({
-      pool: new Pool({
-        connectionString: env.DATABASE_URL,
-      }),
-    }),
-  });
+  return createDatabasePool({ connectionString: env.DATABASE_URL }).db;
 }
