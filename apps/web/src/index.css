@@ -22,17 +22,14 @@ body {
 
 .app-shell {
   display: grid;
-  min-height: 100vh;
-  place-items: center;
-  padding: 2rem;
+  gap: 1.5rem;
+  max-width: 70rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
 }
 
-.app-card {
-  max-width: 40rem;
-  padding: 2.5rem;
-  border: 1px solid #334155;
-  border-radius: 1rem;
-  background-color: #1e293b;
+.app-header {
+  text-align: center;
 }
 
 .app-eyebrow {
@@ -50,7 +47,112 @@ h1 {
   line-height: 1;
 }
 
+h2 {
+  margin-top: 0;
+}
+
 .app-description {
   margin: 0;
   color: #94a3b8;
+}
+
+.app-card {
+  padding: 2rem;
+  border: 1px solid #334155;
+  border-radius: 1rem;
+  background-color: #1e293b;
+}
+
+.app-empty {
+  margin: 0;
+  color: #94a3b8;
+}
+
+.alert {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+}
+
+.alert-error {
+  border: 1px solid #7f1d1d;
+  background-color: #450a0a;
+  color: #fecaca;
+}
+
+.alert-success {
+  border: 1px solid #14532d;
+  background-color: #052e16;
+  color: #bbf7d0;
+}
+
+.tabla-contenedor {
+  overflow-x: auto;
+}
+
+.productos-tabla {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.productos-tabla th,
+.productos-tabla td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #334155;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.productos-tabla th {
+  color: #94a3b8;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cantidad-input {
+  width: 5rem;
+  min-width: 0;
+}
+
+.pedido-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem;
+}
+
+.pedido-form label {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+input {
+  min-width: 16rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #334155;
+  border-radius: 0.5rem;
+  background-color: #0f172a;
+  color: inherit;
+  font: inherit;
+}
+
+button {
+  padding: 0.65rem 1.2rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background-color: #0284c7;
+  color: #f8fafc;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }

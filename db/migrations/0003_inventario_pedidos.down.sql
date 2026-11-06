@@ -1,0 +1,6 @@
+DROP TABLE IF EXISTS facturas;
+DROP TABLE IF EXISTS pedido_items;
+DROP TABLE IF EXISTS pedidos;
+DROP TABLE IF EXISTS stock;
+DROP TABLE IF EXISTS productos;
+DROP SEQUENCE IF EXISTS facturas_numero_seq;
