@@ -1,9 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from './App';
 
 const PRODUCTO_ID = '11111111-1111-4111-8111-111111111111';
+const PEDIDO_ID = '22222222-2222-4222-8222-222222222222';
+const CLIENTE_ID = '33333333-3333-4333-8333-333333333333';
 
 const producto = {
   id: PRODUCTO_ID,
@@ -11,6 +13,17 @@ const producto = {
   nombre: 'Café de prueba',
   precio: 100,
   tipo: 'producto',
+};
+
+const pedidoPagado = {
+  id: PEDIDO_ID,
+  clienteId: CLIENTE_ID,
+  estado: 'Pagado',
+  subtotal: 200,
+  descuento: 0,
+  impuesto: 0,
+  total: 200,
+  items: [{ productoId: PRODUCTO_ID, cantidad: 2, precioUnitario: 100 }],
 };
 
 function respuestaJson(body: unknown, status = 200): Response {
@@ -48,19 +61,23 @@ function instalarFetch(): ReturnType<typeof vi.fn> {
 
       if (url === '/api/pedidos' && init?.method === 'POST') {
         return Promise.resolve(
-          respuestaJson({ id: 'pedido-1', estado: 'Borrador', total: 200 }, 201),
+          respuestaJson({ ...pedidoPagado, estado: 'Borrador', total: 100 }, 201),
         );
       }
 
-      if (url === '/api/pedidos/pedido-1/emitir' && init?.method === 'POST') {
+      if (url === '/api/pedidos') {
+        return Promise.resolve(respuestaJson([pedidoPagado]));
+      }
+
+      if (url === `/api/pedidos/${PEDIDO_ID}/emitir` && init?.method === 'POST') {
         return Promise.resolve(
-          respuestaJson({ id: 'pedido-1', estado: 'Emitido', total: 200 }),
+          respuestaJson({ ...pedidoPagado, estado: 'Emitido', total: 100 }),
         );
       }
 
-      if (url === '/api/pedidos/pedido-1/pagar' && init?.method === 'POST') {
+      if (url === `/api/pedidos/${PEDIDO_ID}/pagar` && init?.method === 'POST') {
         return Promise.resolve(
-          respuestaJson({ id: 'pedido-1', estado: 'Pagado', total: 200 }),
+          respuestaJson({ ...pedidoPagado, estado: 'Pagado', total: 100 }),
         );
       }
 
@@ -73,24 +90,20 @@ function instalarFetch(): ReturnType<typeof vi.fn> {
   return fetchMock;
 }
 
-async function crearPedido(): Promise<void> {
+async function abrirNuevaVenta(): Promise<void> {
   render(<App />);
 
+  fireEvent.click(await screen.findByRole('button', { name: 'Nueva Venta' }));
+
+  expect(
+    await screen.findByRole('heading', { level: 2, name: 'Nueva venta' }),
+  ).toBeInTheDocument();
   await screen.findByText('Café de prueba');
-
-  fireEvent.change(screen.getByLabelText('Documento del Cliente'), {
-    target: { value: 'CC-123456' },
-  });
-  fireEvent.change(screen.getByLabelText('Cantidad para Café de prueba'), {
-    target: { value: '2' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Crear pedido' }));
-
-  await screen.findByRole('status');
 }
 
 describe('App', () => {
   beforeEach(() => {
+    window.history.replaceState({}, '', '/');
     instalarFetch();
   });
 
@@ -104,119 +117,152 @@ describe('App', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Nexo-ERP' })).toBeInTheDocument();
   });
 
-  it('lista los productos con su stock disponible', async () => {
+  it('muestra el historial de ventas con el estado y total de cada pedido', async () => {
     render(<App />);
 
-    expect(await screen.findByText('Café de prueba')).toBeInTheDocument();
-    expect(screen.getByText('SKU-001')).toBeInTheDocument();
-    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Historial de ventas' }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText(PEDIDO_ID)).toBeInTheDocument();
+    expect(screen.getByText(CLIENTE_ID)).toBeInTheDocument();
+    expect(screen.getByText('Pagado')).toBeInTheDocument();
+    const tabla = screen.getByRole('table');
+    expect(within(tabla).getByText(/200/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nueva Venta' })).toBeInTheDocument();
   });
 
-  it('envía la creación de un pedido con las cantidades seleccionadas', async () => {
+  it('abre el POS de dos columnas con el catálogo y su stock', async () => {
+    await abrirNuevaVenta();
+
+    const catalogo = screen.getByRole('region', { name: 'Catálogo' });
+    const carrito = screen.getByRole('region', { name: 'Carrito' });
+
+    expect(within(catalogo).getByText('SKU-001')).toBeInTheDocument();
+    expect(within(catalogo).getByText('Café de prueba')).toBeInTheDocument();
+    expect(within(catalogo).getByText('4')).toBeInTheDocument();
+    expect(within(carrito).getByText('Agrega productos desde el catálogo.')).toBeInTheDocument();
+  });
+
+  it('agrega productos al carrito, recalcula subtotales y permite eliminarlos', async () => {
+    await abrirNuevaVenta();
+
+    const catalogo = screen.getByRole('region', { name: 'Catálogo' });
+    const carrito = screen.getByRole('region', { name: 'Carrito' });
+
+    fireEvent.click(within(catalogo).getByRole('button', { name: 'Agregar' }));
+
+    const cantidad = within(carrito).getByLabelText('Cantidad de Café de prueba');
+    expect(cantidad).toHaveValue(1);
+
+    const subtotalLinea = carrito.querySelector('.pos-linea-subtotal');
+    const totalVenta = carrito.querySelector('.pos-total dd');
+    expect(subtotalLinea).toHaveTextContent('100');
+    expect(totalVenta).toHaveTextContent('100');
+
+    fireEvent.change(cantidad, { target: { value: '2' } });
+
+    expect(cantidad).toHaveValue(2);
+    expect(subtotalLinea).toHaveTextContent('200');
+    expect(totalVenta).toHaveTextContent('200');
+
+    fireEvent.click(
+      within(carrito).getByRole('button', { name: 'Eliminar Café de prueba' }),
+    );
+
+    expect(within(carrito).queryByText('Café de prueba')).not.toBeInTheDocument();
+    expect(within(carrito).getByText('Agrega productos desde el catálogo.')).toBeInTheDocument();
+  });
+
+  it('procesa la venta con el flujo crear, emitir y pagar usando los UUID correctos', async () => {
     const fetchMock = instalarFetch();
 
-    render(<App />);
+    await abrirNuevaVenta();
 
-    await screen.findByText('Café de prueba');
+    const catalogo = screen.getByRole('region', { name: 'Catálogo' });
+    const carrito = screen.getByRole('region', { name: 'Carrito' });
 
-    fireEvent.change(screen.getByLabelText('Documento del Cliente'), {
-      target: { value: '  CC-123456  ' },
-    });
-    fireEvent.change(screen.getByLabelText('Cantidad para Café de prueba'), {
+    fireEvent.click(within(catalogo).getByRole('button', { name: 'Agregar' }));
+    fireEvent.change(within(carrito).getByLabelText('Cantidad de Café de prueba'), {
       target: { value: '2' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Crear pedido' }));
+    fireEvent.change(screen.getByLabelText('Documento del cliente'), {
+      target: { value: '  CC-123456  ' },
+    });
+    fireEvent.change(screen.getByLabelText('Método de pago'), {
+      target: { value: 'pasarela' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Procesar pago' }));
 
-    const estado = await screen.findByRole('status');
-
-    expect(estado).toHaveTextContent(
-      'Pedido pedido-1 creado en estado Borrador',
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Historial de ventas' }),
+    ).toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      new RegExp(`Venta ${PEDIDO_ID} pagada con Pasarela por`),
     );
+
     expect(fetchMock).toHaveBeenCalledWith('/api/pedidos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         documentoCliente: 'CC-123456',
-        items: [{ productoId: producto.id, cantidad: 2 }],
+        items: [{ productoId: PRODUCTO_ID, cantidad: 2 }],
       }),
     });
-  });
-
-  it('paga en efectivo emitiendo primero el pedido y enviando el monto recibido', async () => {
-    const fetchMock = instalarFetch();
-
-    await crearPedido();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Pagar' }));
-
-    expect(await screen.findByRole('dialog', { name: 'Pagar pedido' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Monto recibido')).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText('Monto recibido'), {
-      target: { value: '250' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar pago' }));
-
-    expect(
-      await screen.findByText(/pagado con Efectivo por/),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Pagado')).toBeInTheDocument();
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/pedidos/pedido-1/emitir', {
+    expect(fetchMock).toHaveBeenCalledWith(`/api/pedidos/${PEDIDO_ID}/emitir`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     });
-    expect(fetchMock).toHaveBeenCalledWith('/api/pedidos/pedido-1/pagar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ metodoPago: 'efectivo', montoRecibido: 250 }),
-    });
-  });
-
-  it('paga por pasarela sin solicitar monto recibido', async () => {
-    const fetchMock = instalarFetch();
-
-    await crearPedido();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Pagar' }));
-    await screen.findByRole('dialog', { name: 'Pagar pedido' });
-
-    fireEvent.click(screen.getByLabelText('Pasarela'));
-
-    expect(screen.queryByLabelText('Monto recibido')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar pago' }));
-
-    expect(
-      await screen.findByText(/pagado con Pasarela por/),
-    ).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith('/api/pedidos/pedido-1/pagar', {
+    expect(fetchMock).toHaveBeenCalledWith(`/api/pedidos/${PEDIDO_ID}/pagar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ metodoPago: 'pasarela' }),
     });
   });
 
-  it('no envía el pago si el efectivo recibido no cubre el total', async () => {
+  it('no procesa la venta sin documento del cliente', async () => {
     const fetchMock = instalarFetch();
 
-    await crearPedido();
+    await abrirNuevaVenta();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Pagar' }));
-    await screen.findByRole('dialog', { name: 'Pagar pedido' });
+    const catalogo = screen.getByRole('region', { name: 'Catálogo' });
 
-    fireEvent.change(screen.getByLabelText('Monto recibido'), {
-      target: { value: '50' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar pago' }));
+    fireEvent.click(within(catalogo).getByRole('button', { name: 'Agregar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Procesar pago' }));
 
     expect(
-      await screen.findByText('El monto recibido no cubre el total del pedido.'),
+      await screen.findByText('Ingresa el documento del cliente.'),
     ).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalledWith(
-      '/api/pedidos/pedido-1/pagar',
-      expect.anything(),
+      '/api/pedidos',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('navega entre Ventas, Productos y Clientes resaltando la pestaña activa', async () => {
+    render(<App />);
+
+    const enlaceVentas = await screen.findByRole('link', { name: 'Ventas' });
+    expect(enlaceVentas).toHaveAttribute('aria-current', 'page');
+
+    fireEvent.click(screen.getByRole('link', { name: 'Productos y Stock' }));
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Productos y Stock' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Productos y Stock' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+
+    fireEvent.click(screen.getByRole('link', { name: 'Clientes' }));
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Clientes' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Clientes' })).toHaveAttribute(
+      'aria-current',
+      'page',
     );
   });
 });
