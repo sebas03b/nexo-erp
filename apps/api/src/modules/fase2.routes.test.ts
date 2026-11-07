@@ -11,7 +11,11 @@ import { buildApp } from '../app.js';
 import type { Database } from '../shared/db/schema.js';
 import { SqlFileMigrationProvider } from '../shared/db/sql-file-migration.provider.js';
 import { InventarioRepository } from './inventario/inventario.repository.js';
+import { PagoEfectivo } from './ventas/domain/payments/pago-efectivo.strategy.js';
+import { PagoPasarela } from './ventas/domain/payments/pago-pasarela.strategy.js';
 import { Pedido } from './ventas/domain/pedido.js';
+import { DescuentoPorVolumen } from './ventas/domain/pricing/descuento-volumen.strategy.js';
+import { ImpuestoIva } from './ventas/domain/pricing/impuesto-iva.strategy.js';
 import { VentasRepository } from './ventas/ventas.repository.js';
 
 interface ProductoJson {
@@ -40,6 +44,8 @@ interface FacturaJson {
   estado: string;
   payloadExterno: object | null;
 }
+
+const DOCUMENTO_CLIENTE = '123456789';
 
 const MIGRATIONS_DIRECTORY = fileURLToPath(
   new URL('../../../../db/migrations', import.meta.url),
@@ -89,7 +95,7 @@ describe('Endpoints REST de inventario y ventas', () => {
       .insertInto('clientes')
       .values({
         nombre: 'Cliente de prueba',
-        documento: '123456789',
+        documento: DOCUMENTO_CLIENTE,
         email: null,
         telefono: null,
         canal_preferido: null,
@@ -123,7 +129,7 @@ describe('Endpoints REST de inventario y ventas', () => {
       method: 'POST',
       url: '/api/pedidos',
       payload: {
-        clienteId,
+        documentoCliente: DOCUMENTO_CLIENTE,
         items: [{ productoId: producto.id, cantidad: 1 }],
       },
     });
@@ -208,7 +214,7 @@ describe('Endpoints REST de inventario y ventas', () => {
       method: 'POST',
       url: '/api/pedidos',
       payload: {
-        clienteId,
+        documentoCliente: `  ${DOCUMENTO_CLIENTE}  `,
         items: [{ productoId: producto.id, cantidad: 2 }],
         descuento: 10,
         impuesto: 5,
@@ -287,6 +293,44 @@ describe('Endpoints REST de inventario y ventas', () => {
     });
   });
 
+  it('cambia el total al cambiar las estrategias inyectadas sin tocar Pedido ni VentasService', async () => {
+    const producto = await crearProducto(100);
+    const appConOtrasEstrategias = await buildApp({
+      db,
+      estrategiasVentas: {
+        descuento: new DescuentoPorVolumen([
+          { subtotalMinimo: 100, porcentaje: 0.1 },
+        ]),
+        impuesto: new ImpuestoIva(0.19),
+        pagos: {
+          efectivo: new PagoEfectivo(),
+          pasarela: new PagoPasarela(),
+        },
+      },
+    });
+
+    try {
+      const response = await appConOtrasEstrategias.inject({
+        method: 'POST',
+        url: '/api/pedidos',
+        payload: {
+          documentoCliente: DOCUMENTO_CLIENTE,
+          items: [{ productoId: producto.id, cantidad: 2 }],
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json<PedidoJson>()).toMatchObject({
+        subtotal: 200,
+        descuento: 20,
+        impuesto: 34.2,
+        total: 214.2,
+      });
+    } finally {
+      await appConOtrasEstrategias.close();
+    }
+  });
+
   it('rechaza pedidos con datos inválidos o clientes inexistentes', async () => {
     const producto = await crearProducto();
 
@@ -294,7 +338,7 @@ describe('Endpoints REST de inventario y ventas', () => {
       method: 'POST',
       url: '/api/pedidos',
       payload: {
-        clienteId: randomUUID(),
+        documentoCliente: 'DOCUMENTO-INEXISTENTE',
         items: [{ productoId: producto.id, cantidad: 1 }],
       },
     });
@@ -306,7 +350,7 @@ describe('Endpoints REST de inventario y ventas', () => {
     const sinItems = await app.inject({
       method: 'POST',
       url: '/api/pedidos',
-      payload: { clienteId, items: [] },
+      payload: { documentoCliente: DOCUMENTO_CLIENTE, items: [] },
     });
     expect(sinItems.statusCode).toBe(400);
     expect(sinItems.json()).toMatchObject({
@@ -439,6 +483,70 @@ describe('Endpoints REST de inventario y ventas', () => {
       pedidoId: pedido.id,
       clienteId,
       total: 100,
+    });
+  });
+
+  it('cobra con la estrategia de pago y rechaza efectivo insuficiente', async () => {
+    const pedido = await crearPedidoBorrador();
+
+    const emision = await app.inject({
+      method: 'POST',
+      url: `/api/pedidos/${pedido.id}/emitir`,
+    });
+    expect(emision.statusCode).toBe(200);
+
+    const pagoInsuficiente = await app.inject({
+      method: 'POST',
+      url: `/api/pedidos/${pedido.id}/pagar`,
+      payload: { montoRecibido: 50 },
+    });
+    expect(pagoInsuficiente.statusCode).toBe(400);
+    expect(pagoInsuficiente.json()).toMatchObject({
+      error: { code: 'PAGO_INSUFICIENTE' },
+    });
+
+    const pago = await app.inject({
+      method: 'POST',
+      url: `/api/pedidos/${pedido.id}/pagar`,
+      payload: { montoRecibido: 150 },
+    });
+    expect(pago.statusCode).toBe(200);
+    expect(pago.json<PedidoJson>().estado).toBe('Pagado');
+
+    const eventos = await db.selectFrom('outbox_events').selectAll().execute();
+    const pagado = eventos.find((evento) => evento.tipo === 'PedidoPagado');
+
+    expect(pagado?.payload).toMatchObject({
+      pedidoId: pedido.id,
+      total: 100,
+      metodoPago: 'efectivo',
+    });
+  });
+
+  it('cobra con la estrategia de pasarela cuando se solicita', async () => {
+    const pedido = await crearPedidoBorrador();
+
+    const emision = await app.inject({
+      method: 'POST',
+      url: `/api/pedidos/${pedido.id}/emitir`,
+    });
+    expect(emision.statusCode).toBe(200);
+
+    const pago = await app.inject({
+      method: 'POST',
+      url: `/api/pedidos/${pedido.id}/pagar`,
+      payload: { metodoPago: 'pasarela' },
+    });
+    expect(pago.statusCode).toBe(200);
+    expect(pago.json<PedidoJson>().estado).toBe('Pagado');
+
+    const eventos = await db.selectFrom('outbox_events').selectAll().execute();
+    const pagado = eventos.find((evento) => evento.tipo === 'PedidoPagado');
+
+    expect(pagado?.payload).toMatchObject({
+      pedidoId: pedido.id,
+      total: 100,
+      metodoPago: 'pasarela',
     });
   });
 

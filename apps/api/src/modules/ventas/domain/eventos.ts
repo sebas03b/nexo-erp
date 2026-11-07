@@ -10,5 +10,7 @@ export type VentasEventMap = {
     clienteId: string;
     total: number;
     pagadoEn: string;
+    metodoPago: string;
+    referenciaPago: string;
   };
 };

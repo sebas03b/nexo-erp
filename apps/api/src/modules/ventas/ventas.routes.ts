@@ -5,7 +5,7 @@ import type { UnitOfWork } from '../../shared/db/unit-of-work.js';
 import type { VentasEventMap } from './domain/eventos.js';
 import type { VentasRepository } from './ventas.repository.js';
 import type { CatalogoProductos, VerificadorClientes } from './domain/ports.js';
-import { VentasService } from './ventas.service.js';
+import { VentasService, type EstrategiasVentas } from './ventas.service.js';
 
 const pedidoItemSchema = z.object({
   productoId: z.string().uuid(),
@@ -13,10 +13,15 @@ const pedidoItemSchema = z.object({
 });
 
 const crearPedidoSchema = z.object({
-  clienteId: z.string().uuid(),
+  documentoCliente: z.string().trim().min(1),
   items: z.array(pedidoItemSchema).min(1),
   descuento: z.coerce.number().nonnegative().optional(),
   impuesto: z.coerce.number().nonnegative().optional(),
+});
+
+const pagoSchema = z.object({
+  metodoPago: z.enum(['efectivo', 'pasarela']).optional(),
+  montoRecibido: z.coerce.number().nonnegative().optional(),
 });
 
 const pedidoParamsSchema = z.object({
@@ -32,14 +37,21 @@ export interface VentasRoutesOptions {
   unitOfWork: UnitOfWork<VentasEventMap>;
   catalogo: CatalogoProductos;
   clientes: VerificadorClientes;
+  estrategias: EstrategiasVentas;
 }
 
 export const ventasRoutes: FastifyPluginCallback<VentasRoutesOptions> = (
   app,
-  { repository, unitOfWork, catalogo, clientes },
+  { repository, unitOfWork, catalogo, clientes, estrategias },
   done,
 ) => {
-  const service = new VentasService(repository, unitOfWork, catalogo, clientes);
+  const service = new VentasService(
+    repository,
+    unitOfWork,
+    catalogo,
+    clientes,
+    estrategias,
+  );
 
   app.get('/api/pedidos', async () => service.listarPedidos());
 
@@ -64,8 +76,9 @@ export const ventasRoutes: FastifyPluginCallback<VentasRoutesOptions> = (
 
   app.post<{ Params: { id: string } }>('/api/pedidos/:id/pagar', async (request) => {
     const { id } = pedidoParamsSchema.parse(request.params);
+    const opcionesPago = pagoSchema.parse(request.body ?? {});
 
-    return service.pagarPedido(id);
+    return service.pagarPedido(id, opcionesPago);
   });
 
   app.post<{ Params: { id: string } }>('/api/pedidos/:id/anular', async (request) => {

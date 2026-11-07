@@ -7,9 +7,14 @@ import { env } from './config/env.js';
 import { InventarioRepository } from './modules/inventario/inventario.repository.js';
 import { inventarioRoutes } from './modules/inventario/inventario.routes.js';
 import type { VentasEventMap } from './modules/ventas/domain/eventos.js';
+import { PagoEfectivo } from './modules/ventas/domain/payments/pago-efectivo.strategy.js';
+import { PagoPasarela } from './modules/ventas/domain/payments/pago-pasarela.strategy.js';
 import type { CatalogoProductos, VerificadorClientes } from './modules/ventas/domain/ports.js';
+import { DescuentoPorVolumen } from './modules/ventas/domain/pricing/descuento-volumen.strategy.js';
+import { ImpuestoExento } from './modules/ventas/domain/pricing/impuesto-exento.strategy.js';
 import { VentasRepository } from './modules/ventas/ventas.repository.js';
 import { ventasRoutes } from './modules/ventas/ventas.routes.js';
+import type { EstrategiasVentas } from './modules/ventas/ventas.service.js';
 import { createDatabase } from './shared/db/database.js';
 import type { Database } from './shared/db/schema.js';
 import { UnitOfWork } from './shared/db/unit-of-work.js';
@@ -18,6 +23,7 @@ import { InMemoryEventBus } from './shared/events/event-bus.js';
 
 export interface BuildAppOptions {
   db?: Kysely<Database>;
+  estrategiasVentas?: EstrategiasVentas;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -99,14 +105,23 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   };
 
   const clientes: VerificadorClientes = {
-    existe: async (clienteId) => {
+    obtenerPorDocumento: async (documento) => {
       const cliente = await db
         .selectFrom('clientes')
         .select('id')
-        .where('id', '=', clienteId)
+        .where('documento', '=', documento)
         .executeTakeFirst();
 
-      return cliente !== undefined;
+      return cliente ?? null;
+    },
+  };
+
+  const estrategiasVentas: EstrategiasVentas = options.estrategiasVentas ?? {
+    descuento: new DescuentoPorVolumen(),
+    impuesto: new ImpuestoExento(),
+    pagos: {
+      efectivo: new PagoEfectivo(),
+      pasarela: new PagoPasarela(),
     },
   };
 
@@ -116,6 +131,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     unitOfWork,
     catalogo,
     clientes,
+    estrategias: estrategiasVentas,
   });
 
   if (ownsDb) {

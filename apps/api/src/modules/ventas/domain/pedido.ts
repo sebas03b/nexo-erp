@@ -1,11 +1,14 @@
 // Patrón: State
 
 import { DomainError } from '../../../shared/errors/domain-error.js';
+import { redondearMoneda } from './dinero.js';
 import {
   esEstadoPedido,
   type EstadoPedido,
   type PedidoEstado,
 } from './pedido-estado.js';
+import type { DescuentoStrategy } from './pricing/descuento.strategy.js';
+import type { ImpuestoStrategy } from './pricing/impuesto.strategy.js';
 import { AnuladoState } from './states/anulado.state.js';
 import { BorradorState } from './states/borrador.state.js';
 import { EmitidoState } from './states/emitido.state.js';
@@ -39,6 +42,29 @@ export interface PedidoJson {
   items: PedidoItem[];
 }
 
+export interface EstrategiasCalculoPedido {
+  readonly descuento: DescuentoStrategy;
+  readonly impuesto: ImpuestoStrategy;
+}
+
+export interface ContextoCalculoPedido {
+  readonly esClienteFrecuente?: boolean;
+}
+
+export interface TotalesPedido {
+  readonly subtotal: number;
+  readonly descuento: number;
+  readonly impuesto: number;
+  readonly total: number;
+}
+
+export interface NuevoPedidoData {
+  readonly id: string;
+  readonly clienteId: string;
+  readonly estado: EstadoPedido;
+  readonly items: readonly PedidoItem[];
+}
+
 function crearEstado(estado: EstadoPedido): PedidoEstado {
   switch (estado) {
     case 'Borrador':
@@ -62,6 +88,58 @@ export class Pedido {
   readonly items: readonly PedidoItem[];
 
   #estado: PedidoEstado;
+
+  static calcularTotales(
+    items: readonly PedidoItem[],
+    estrategias: EstrategiasCalculoPedido,
+    contexto: ContextoCalculoPedido = {},
+  ): TotalesPedido {
+    const subtotal = redondearMoneda(
+      items.reduce(
+        (acumulado, item) => acumulado + item.precioUnitario * item.cantidad,
+        0,
+      ),
+    );
+    const descuento = redondearMoneda(
+      estrategias.descuento.calcular({
+        subtotal,
+        esClienteFrecuente: contexto.esClienteFrecuente ?? false,
+      }),
+    );
+
+    if (descuento < 0 || descuento > subtotal) {
+      throw new DomainError('El descuento no puede superar el subtotal', {
+        code: 'DESCUENTO_INVALIDO',
+        statusCode: 400,
+      });
+    }
+
+    const baseImponible = redondearMoneda(subtotal - descuento);
+    const impuesto = redondearMoneda(
+      estrategias.impuesto.calcular({ baseImponible }),
+    );
+
+    if (impuesto < 0) {
+      throw new DomainError('El impuesto no puede ser negativo', {
+        code: 'IMPUESTO_INVALIDO',
+        statusCode: 400,
+      });
+    }
+
+    const total = redondearMoneda(baseImponible + impuesto);
+
+    return { subtotal, descuento, impuesto, total };
+  }
+
+  static crear(
+    data: NuevoPedidoData,
+    estrategias: EstrategiasCalculoPedido,
+    contexto: ContextoCalculoPedido = {},
+  ): Pedido {
+    const totales = Pedido.calcularTotales(data.items, estrategias, contexto);
+
+    return new Pedido({ ...data, ...totales });
+  }
 
   constructor(data: PedidoData) {
     if (!esEstadoPedido(data.estado)) {

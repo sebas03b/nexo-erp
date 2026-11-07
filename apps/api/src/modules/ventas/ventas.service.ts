@@ -9,6 +9,11 @@ import type { VentasEventMap } from './domain/eventos.js';
 import { Factura } from './domain/factura.js';
 import { Pedido, type PedidoItem } from './domain/pedido.js';
 import type { EstadoPedido } from './domain/pedido-estado.js';
+import { DescuentoPromocion } from './domain/pricing/descuento-promocion.strategy.js';
+import type { DescuentoStrategy } from './domain/pricing/descuento.strategy.js';
+import { ImpuestoFijo } from './domain/pricing/impuesto-fijo.strategy.js';
+import type { ImpuestoStrategy } from './domain/pricing/impuesto.strategy.js';
+import type { PagoContexto, PagoStrategy } from './domain/payments/pago.strategy.js';
 import type { CatalogoProductos, VerificadorClientes } from './domain/ports.js';
 import type { VentasRepository } from './ventas.repository.js';
 
@@ -18,40 +23,51 @@ export interface CrearPedidoItemInput {
 }
 
 export interface CrearPedidoInput {
-  clienteId: string;
+  documentoCliente: string;
   items: CrearPedidoItemInput[];
   descuento?: number;
   impuesto?: number;
 }
 
-type VentasTransaction = UnitOfWorkContext<VentasEventMap>['db'];
-
-function redondear(valor: number): number {
-  return Math.round((valor + Number.EPSILON) * 100) / 100;
+export interface EstrategiasVentas {
+  readonly descuento: DescuentoStrategy;
+  readonly impuesto: ImpuestoStrategy;
+  readonly pagos: Readonly<Record<MetodoPago, PagoStrategy>>;
 }
+
+export type MetodoPago = 'efectivo' | 'pasarela';
+
+export interface OpcionesPago extends Omit<PagoContexto, 'monto'> {
+  readonly metodoPago?: MetodoPago;
+}
+
+type VentasTransaction = UnitOfWorkContext<VentasEventMap>['db'];
 
 export class VentasService {
   readonly #repository: VentasRepository;
   readonly #unitOfWork: UnitOfWork<VentasEventMap>;
   readonly #catalogo: CatalogoProductos;
   readonly #clientes: VerificadorClientes;
+  readonly #estrategias: EstrategiasVentas;
 
   constructor(
     repository: VentasRepository,
     unitOfWork: UnitOfWork<VentasEventMap>,
     catalogo: CatalogoProductos,
     clientes: VerificadorClientes,
+    estrategias: EstrategiasVentas,
   ) {
     this.#repository = repository;
     this.#unitOfWork = unitOfWork;
     this.#catalogo = catalogo;
     this.#clientes = clientes;
+    this.#estrategias = estrategias;
   }
 
   async crearPedido(data: CrearPedidoInput): Promise<Pedido> {
-    const clienteExiste = await this.#clientes.existe(data.clienteId);
+    const cliente = await this.#clientes.obtenerPorDocumento(data.documentoCliente.trim());
 
-    if (!clienteExiste) {
+    if (!cliente) {
       throw new RecursoNoEncontrado('CLIENTE_NO_ENCONTRADO', 'Cliente no encontrado');
     }
 
@@ -84,31 +100,25 @@ export class VentasService {
       });
     }
 
-    const subtotal = redondear(
-      items.reduce((acumulado, item) => acumulado + item.precioUnitario * item.cantidad, 0),
+    const descuentoStrategy =
+      data.descuento === undefined
+        ? this.#estrategias.descuento
+        : new DescuentoPromocion({ montoFijo: data.descuento });
+    const impuestoStrategy =
+      data.impuesto === undefined
+        ? this.#estrategias.impuesto
+        : new ImpuestoFijo(data.impuesto);
+
+    const pedido = Pedido.crear(
+      {
+        id: randomUUID(),
+        clienteId: cliente.id,
+        estado: 'Borrador',
+        items,
+      },
+      { descuento: descuentoStrategy, impuesto: impuestoStrategy },
+      { esClienteFrecuente: cliente.esClienteFrecuente ?? false },
     );
-    const descuento = redondear(data.descuento ?? 0);
-    const impuesto = redondear(data.impuesto ?? 0);
-
-    if (descuento > subtotal) {
-      throw new DomainError('El descuento no puede superar el subtotal', {
-        code: 'DESCUENTO_INVALIDO',
-        statusCode: 400,
-      });
-    }
-
-    const total = redondear(subtotal - descuento + impuesto);
-
-    const pedido = new Pedido({
-      id: randomUUID(),
-      clienteId: data.clienteId,
-      estado: 'Borrador',
-      subtotal,
-      descuento,
-      impuesto,
-      total,
-      items,
-    });
 
     await this.#unitOfWork.execute(async ({ db }) => {
       await this.#repository.crearPedido(db, pedido);
@@ -149,10 +159,20 @@ export class VentasService {
     return pedido;
   }
 
-  async pagarPedido(id: string): Promise<Pedido> {
+  async pagarPedido(
+    id: string,
+    opcionesPago: OpcionesPago = {},
+  ): Promise<Pedido> {
+    const { metodoPago = 'efectivo', ...contextoPago } = opcionesPago;
+    const estrategiaPago = this.#estrategias.pagos[metodoPago];
     const pedido = await this.obtenerPedido(id);
     const estadoEsperado = pedido.estado;
     pedido.pagar();
+
+    const pago = await estrategiaPago.cobrar({
+      monto: pedido.total,
+      ...contextoPago,
+    });
 
     await this.#unitOfWork.execute(async (context) => {
       await this.#persistirTransicion(context.db, pedido, estadoEsperado);
@@ -161,6 +181,8 @@ export class VentasService {
         clienteId: pedido.clienteId,
         total: pedido.total,
         pagadoEn: new Date().toISOString(),
+        metodoPago: pago.metodo,
+        referenciaPago: pago.referencia,
       });
     });
 

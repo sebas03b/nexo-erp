@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from './App';
 
+const PRODUCTO_ID = '11111111-1111-4111-8111-111111111111';
+
 const producto = {
-  id: 'producto-1',
+  id: PRODUCTO_ID,
   sku: 'SKU-001',
   nombre: 'Café de prueba',
   precio: 100,
@@ -50,6 +52,18 @@ function instalarFetch(): ReturnType<typeof vi.fn> {
         );
       }
 
+      if (url === '/api/pedidos/pedido-1/emitir' && init?.method === 'POST') {
+        return Promise.resolve(
+          respuestaJson({ id: 'pedido-1', estado: 'Emitido', total: 200 }),
+        );
+      }
+
+      if (url === '/api/pedidos/pedido-1/pagar' && init?.method === 'POST') {
+        return Promise.resolve(
+          respuestaJson({ id: 'pedido-1', estado: 'Pagado', total: 200 }),
+        );
+      }
+
       return Promise.resolve(respuestaJson({ error: { message: 'No encontrado' } }, 404));
     },
   );
@@ -57,6 +71,22 @@ function instalarFetch(): ReturnType<typeof vi.fn> {
   vi.stubGlobal('fetch', fetchMock);
 
   return fetchMock;
+}
+
+async function crearPedido(): Promise<void> {
+  render(<App />);
+
+  await screen.findByText('Café de prueba');
+
+  fireEvent.change(screen.getByLabelText('Documento del Cliente'), {
+    target: { value: 'CC-123456' },
+  });
+  fireEvent.change(screen.getByLabelText('Cantidad para Café de prueba'), {
+    target: { value: '2' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Crear pedido' }));
+
+  await screen.findByRole('status');
 }
 
 describe('App', () => {
@@ -89,8 +119,8 @@ describe('App', () => {
 
     await screen.findByText('Café de prueba');
 
-    fireEvent.change(screen.getByLabelText('Cliente'), {
-      target: { value: '11111111-1111-4111-8111-111111111111' },
+    fireEvent.change(screen.getByLabelText('Documento del Cliente'), {
+      target: { value: '  CC-123456  ' },
     });
     fireEvent.change(screen.getByLabelText('Cantidad para Café de prueba'), {
       target: { value: '2' },
@@ -102,9 +132,91 @@ describe('App', () => {
     expect(estado).toHaveTextContent(
       'Pedido pedido-1 creado en estado Borrador',
     );
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/pedidos',
-      expect.objectContaining({ method: 'POST' }),
+    expect(fetchMock).toHaveBeenCalledWith('/api/pedidos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        documentoCliente: 'CC-123456',
+        items: [{ productoId: producto.id, cantidad: 2 }],
+      }),
+    });
+  });
+
+  it('paga en efectivo emitiendo primero el pedido y enviando el monto recibido', async () => {
+    const fetchMock = instalarFetch();
+
+    await crearPedido();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pagar' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Pagar pedido' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Monto recibido')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Monto recibido'), {
+      target: { value: '250' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar pago' }));
+
+    expect(
+      await screen.findByText(/pagado con Efectivo por/),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Pagado')).toBeInTheDocument();
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/pedidos/pedido-1/emitir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/pedidos/pedido-1/pagar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ metodoPago: 'efectivo', montoRecibido: 250 }),
+    });
+  });
+
+  it('paga por pasarela sin solicitar monto recibido', async () => {
+    const fetchMock = instalarFetch();
+
+    await crearPedido();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pagar' }));
+    await screen.findByRole('dialog', { name: 'Pagar pedido' });
+
+    fireEvent.click(screen.getByLabelText('Pasarela'));
+
+    expect(screen.queryByLabelText('Monto recibido')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar pago' }));
+
+    expect(
+      await screen.findByText(/pagado con Pasarela por/),
+    ).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith('/api/pedidos/pedido-1/pagar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ metodoPago: 'pasarela' }),
+    });
+  });
+
+  it('no envía el pago si el efectivo recibido no cubre el total', async () => {
+    const fetchMock = instalarFetch();
+
+    await crearPedido();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pagar' }));
+    await screen.findByRole('dialog', { name: 'Pagar pedido' });
+
+    fireEvent.change(screen.getByLabelText('Monto recibido'), {
+      target: { value: '50' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar pago' }));
+
+    expect(
+      await screen.findByText('El monto recibido no cubre el total del pedido.'),
+    ).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/pedidos/pedido-1/pagar',
+      expect.anything(),
     );
   });
 });
