@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type JSX } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { useCatalogo } from '../hooks/useCatalogo';
 import { enviarJson } from '../lib/api';
@@ -147,11 +147,29 @@ export function NuevaVenta(): JSX.Element {
   return (
     <div className="pagina pos-pagina">
       <header className="pagina-header">
-        <p className="app-eyebrow">Punto de venta</p>
-        <h2>Nueva venta</h2>
-        <p className="app-description">
-          Selecciona productos del catálogo y confirma el cobro del pedido.
-        </p>
+        <div>
+          <Link
+            to="/ventas"
+            className="pagina-volver"
+            aria-label="Volver a Ventas"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                d="M19 12H5M11 6l-6 6 6 6"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.8"
+              />
+            </svg>
+            Ventas
+          </Link>
+          <h2>Nueva venta</h2>
+          <p className="app-description">
+            Selecciona productos del catálogo y confirma el cobro del pedido.
+          </p>
+        </div>
       </header>
 
       <div className="pos-grid">

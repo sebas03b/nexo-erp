@@ -149,6 +149,35 @@ body {
   gap: 1rem;
 }
 
+.pagina-volver {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: fit-content;
+  margin-bottom: 0.35rem;
+  color: #38bdf8;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: color 150ms ease;
+}
+
+.pagina-volver:hover {
+  color: #7dd3fc;
+}
+
+.pagina-volver svg {
+  width: 1rem;
+  height: 1rem;
+  transition: transform 150ms ease;
+}
+
+.pagina-volver:hover svg {
+  transform: translateX(-2px);
+}
+
 h1 {
   margin: 0;
   font-size: 1.5rem;
@@ -421,6 +450,107 @@ button:disabled {
   gap: 0.75rem;
 }
 
+.modal-detalle {
+  width: min(38rem, 100%);
+}
+
+.modal-detalle-cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.modal-detalle-cabecera .seccion-titulo {
+  margin: 0;
+}
+
+.detalle-datos,
+.detalle-financiero {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0 0 1.25rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #334155;
+  border-radius: 0.75rem;
+  background-color: #0f172a;
+}
+
+.detalle-datos div,
+.detalle-financiero div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.detalle-datos dt,
+.detalle-financiero dt {
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.detalle-datos dd,
+.detalle-financiero dd {
+  margin: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-align: right;
+  text-overflow: ellipsis;
+}
+
+.detalle-cliente-nombre,
+.detalle-cliente-documento {
+  display: block;
+}
+
+.detalle-cliente-documento {
+  margin-top: 0.15rem;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: normal;
+}
+
+.detalle-total {
+  padding-top: 0.5rem;
+  border-top: 1px dashed #334155;
+}
+
+.detalle-total dt {
+  color: #e2e8f0;
+}
+
+.detalle-total dd {
+  color: #86efac;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.detalle-subtitulo {
+  margin: 0 0 0.6rem;
+  color: #e2e8f0;
+  font-size: 0.95rem;
+}
+
+.detalle-items-tabla {
+  margin-bottom: 1.25rem;
+}
+
+.detalle-items-tabla th:last-child,
+.detalle-items-tabla td:last-child {
+  text-align: right;
+}
+
+.modal-detalle .modal-actions {
+  margin-top: 1.25rem;
+}
+
 .boton-secundario {
   border: 1px solid #334155;
   background-color: transparent;
@@ -487,6 +617,13 @@ button:disabled {
 
 .seccion-cabecera .seccion-titulo {
   margin: 0;
+}
+
+.seccion-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .celda-id {

@@ -29,12 +29,19 @@ interface ProductoJson {
 interface PedidoJson {
   id: string;
   clienteId: string;
+  clienteNombre?: string;
+  clienteDocumento?: string;
   estado: string;
   subtotal: number;
   descuento: number;
   impuesto: number;
   total: number;
-  items: Array<{ productoId: string; cantidad: number; precioUnitario: number }>;
+  items: Array<{
+    productoId: string;
+    productoNombre?: string;
+    cantidad: number;
+    precioUnitario: number;
+  }>;
 }
 
 interface FacturaJson {
@@ -290,6 +297,61 @@ describe('Endpoints REST de inventario y ventas', () => {
     expect(facturaDuplicada.statusCode).toBe(409);
     expect(facturaDuplicada.json()).toMatchObject({
       error: { code: 'FACTURA_EXISTENTE' },
+    });
+  });
+
+  it('expone datos legibles del cliente y de los productos en el listado y el detalle', async () => {
+    const producto = await crearProducto(100);
+
+    const creacion = await app.inject({
+      method: 'POST',
+      url: '/api/pedidos',
+      payload: {
+        documentoCliente: DOCUMENTO_CLIENTE,
+        items: [{ productoId: producto.id, cantidad: 2 }],
+      },
+    });
+
+    expect(creacion.statusCode).toBe(201);
+    const pedido = creacion.json<PedidoJson>();
+
+    const listado = await app.inject({ method: 'GET', url: '/api/pedidos' });
+    expect(listado.statusCode).toBe(200);
+    expect(listado.json<PedidoJson[]>()).toMatchObject([
+      {
+        id: pedido.id,
+        clienteId,
+        clienteNombre: 'Cliente de prueba',
+        clienteDocumento: DOCUMENTO_CLIENTE,
+        items: [
+          {
+            productoId: producto.id,
+            productoNombre: 'Café de prueba',
+            cantidad: 2,
+            precioUnitario: 100,
+          },
+        ],
+      },
+    ]);
+
+    const detalle = await app.inject({
+      method: 'GET',
+      url: `/api/pedidos/${pedido.id}`,
+    });
+    expect(detalle.statusCode).toBe(200);
+    expect(detalle.json<PedidoJson>()).toMatchObject({
+      id: pedido.id,
+      clienteId,
+      clienteNombre: 'Cliente de prueba',
+      clienteDocumento: DOCUMENTO_CLIENTE,
+      items: [
+        {
+          productoId: producto.id,
+          productoNombre: 'Café de prueba',
+          cantidad: 2,
+          precioUnitario: 100,
+        },
+      ],
     });
   });
 

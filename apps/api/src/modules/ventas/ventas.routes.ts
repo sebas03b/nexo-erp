@@ -58,7 +58,7 @@ export const ventasRoutes: FastifyPluginCallback<VentasRoutesOptions> = (
   app.get<{ Params: { id: string } }>('/api/pedidos/:id', async (request) => {
     const { id } = pedidoParamsSchema.parse(request.params);
 
-    return service.obtenerPedido(id);
+    return service.obtenerPedidoDetalle(id);
   });
 
   app.post('/api/pedidos', async (request, reply) => {

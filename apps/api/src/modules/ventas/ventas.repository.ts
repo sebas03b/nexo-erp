@@ -7,6 +7,7 @@ import {
 import type { Database } from '../../shared/db/schema.js';
 import { Factura } from './domain/factura.js';
 import { Pedido, type PedidoItem } from './domain/pedido.js';
+import type { PedidoDetalle, PedidoItemDetalle } from './domain/pedido-detalle.js';
 import { esEstadoPedido, type EstadoPedido } from './domain/pedido-estado.js';
 
 type Executor = Kysely<Database>;
@@ -21,11 +22,20 @@ interface PedidoRow {
   total: string;
 }
 
+interface PedidoDetalleRow extends PedidoRow {
+  cliente_nombre: string;
+  cliente_documento: string;
+}
+
 interface PedidoItemRow {
   pedido_id: string;
   producto_id: string;
   cantidad: number;
   precio_unitario: string;
+}
+
+interface PedidoItemDetalleRow extends PedidoItemRow {
+  producto_nombre: string;
 }
 
 interface FacturaRow {
@@ -70,6 +80,15 @@ function mapItem(row: PedidoItemRow): PedidoItem {
   };
 }
 
+function mapItemDetalle(row: PedidoItemDetalleRow): PedidoItemDetalle {
+  return {
+    productoId: row.producto_id,
+    productoNombre: row.producto_nombre,
+    cantidad: row.cantidad,
+    precioUnitario: Number(row.precio_unitario),
+  };
+}
+
 function mapPedido(row: PedidoRow, items: readonly PedidoItem[]): Pedido {
   if (!esEstadoPedido(row.estado)) {
     throw new Error(`Estado de pedido desconocido en base de datos: ${row.estado}`);
@@ -85,6 +104,28 @@ function mapPedido(row: PedidoRow, items: readonly PedidoItem[]): Pedido {
     total: Number(row.total),
     items,
   });
+}
+
+function mapPedidoDetalle(
+  row: PedidoDetalleRow,
+  items: readonly PedidoItemDetalle[],
+): PedidoDetalle {
+  if (!esEstadoPedido(row.estado)) {
+    throw new Error(`Estado de pedido desconocido en base de datos: ${row.estado}`);
+  }
+
+  return {
+    id: row.id,
+    clienteId: row.cliente_id,
+    clienteNombre: row.cliente_nombre,
+    clienteDocumento: row.cliente_documento,
+    estado: row.estado,
+    subtotal: Number(row.subtotal),
+    descuento: Number(row.descuento),
+    impuesto: Number(row.impuesto),
+    total: Number(row.total),
+    items: [...items],
+  };
 }
 
 function mapFactura(row: FacturaRow): Factura {
@@ -139,8 +180,23 @@ export class VentasRepository {
     }
   }
 
-  async listarPedidos(): Promise<Pedido[]> {
-    const pedidoRows = await this.#db.selectFrom('pedidos').selectAll().orderBy('id').execute();
+  async listarPedidos(): Promise<PedidoDetalle[]> {
+    const pedidoRows = await this.#db
+      .selectFrom('pedidos')
+      .innerJoin('clientes', 'clientes.id', 'pedidos.cliente_id')
+      .select([
+        'pedidos.id',
+        'pedidos.cliente_id',
+        'pedidos.estado',
+        'pedidos.subtotal',
+        'pedidos.descuento',
+        'pedidos.impuesto',
+        'pedidos.total',
+        'clientes.nombre as cliente_nombre',
+        'clientes.documento as cliente_documento',
+      ])
+      .orderBy('pedidos.id')
+      .execute();
 
     if (pedidoRows.length === 0) {
       return [];
@@ -149,19 +205,29 @@ export class VentasRepository {
     const pedidoIds = pedidoRows.map((row) => row.id);
     const itemRows = await this.#db
       .selectFrom('pedido_items')
-      .selectAll()
-      .where('pedido_id', 'in', pedidoIds)
+      .innerJoin('productos', 'productos.id', 'pedido_items.producto_id')
+      .select([
+        'pedido_items.pedido_id',
+        'pedido_items.producto_id',
+        'pedido_items.cantidad',
+        'pedido_items.precio_unitario',
+        'productos.nombre as producto_nombre',
+      ])
+      .where('pedido_items.pedido_id', 'in', pedidoIds)
+      .orderBy('pedido_items.producto_id')
       .execute();
 
-    const itemsPorPedido = new Map<string, PedidoItem[]>();
+    const itemsPorPedido = new Map<string, PedidoItemDetalle[]>();
 
     for (const itemRow of itemRows) {
       const items = itemsPorPedido.get(itemRow.pedido_id) ?? [];
-      items.push(mapItem(itemRow));
+      items.push(mapItemDetalle(itemRow));
       itemsPorPedido.set(itemRow.pedido_id, items);
     }
 
-    return pedidoRows.map((row) => mapPedido(row, itemsPorPedido.get(row.id) ?? []));
+    return pedidoRows.map((row) =>
+      mapPedidoDetalle(row, itemsPorPedido.get(row.id) ?? []),
+    );
   }
 
   async obtenerPedido(id: string): Promise<Pedido | undefined> {
@@ -182,6 +248,45 @@ export class VentasRepository {
       .execute();
 
     return mapPedido(pedidoRow, itemRows.map(mapItem));
+  }
+
+  async obtenerPedidoDetalle(id: string): Promise<PedidoDetalle | undefined> {
+    const pedidoRow = await this.#db
+      .selectFrom('pedidos')
+      .innerJoin('clientes', 'clientes.id', 'pedidos.cliente_id')
+      .select([
+        'pedidos.id',
+        'pedidos.cliente_id',
+        'pedidos.estado',
+        'pedidos.subtotal',
+        'pedidos.descuento',
+        'pedidos.impuesto',
+        'pedidos.total',
+        'clientes.nombre as cliente_nombre',
+        'clientes.documento as cliente_documento',
+      ])
+      .where('pedidos.id', '=', id)
+      .executeTakeFirst();
+
+    if (!pedidoRow) {
+      return undefined;
+    }
+
+    const itemRows = await this.#db
+      .selectFrom('pedido_items')
+      .innerJoin('productos', 'productos.id', 'pedido_items.producto_id')
+      .select([
+        'pedido_items.pedido_id',
+        'pedido_items.producto_id',
+        'pedido_items.cantidad',
+        'pedido_items.precio_unitario',
+        'productos.nombre as producto_nombre',
+      ])
+      .where('pedido_items.pedido_id', '=', id)
+      .orderBy('pedido_items.producto_id')
+      .execute();
+
+    return mapPedidoDetalle(pedidoRow, itemRows.map(mapItemDetalle));
   }
 
   /**

@@ -8,6 +8,7 @@ import { DomainError, RecursoNoEncontrado } from '../../shared/errors/domain-err
 import type { VentasEventMap } from './domain/eventos.js';
 import { Factura } from './domain/factura.js';
 import { Pedido, type PedidoItem } from './domain/pedido.js';
+import type { PedidoDetalle } from './domain/pedido-detalle.js';
 import type { EstadoPedido } from './domain/pedido-estado.js';
 import { DescuentoPromocion } from './domain/pricing/descuento-promocion.strategy.js';
 import type { DescuentoStrategy } from './domain/pricing/descuento.strategy.js';
@@ -127,8 +128,18 @@ export class VentasService {
     return pedido;
   }
 
-  listarPedidos(): Promise<Pedido[]> {
+  listarPedidos(): Promise<PedidoDetalle[]> {
     return this.#repository.listarPedidos();
+  }
+
+  async obtenerPedidoDetalle(id: string): Promise<PedidoDetalle> {
+    const pedido = await this.#repository.obtenerPedidoDetalle(id);
+
+    if (!pedido) {
+      throw new RecursoNoEncontrado('PEDIDO_NO_ENCONTRADO', 'Pedido no encontrado');
+    }
+
+    return pedido;
   }
 
   async obtenerPedido(id: string): Promise<Pedido> {

@@ -6,11 +6,14 @@ import { App } from './App';
 const PRODUCTO_ID = '11111111-1111-4111-8111-111111111111';
 const PEDIDO_ID = '22222222-2222-4222-8222-222222222222';
 const CLIENTE_ID = '33333333-3333-4333-8333-333333333333';
+const CLIENTE_NOMBRE = 'Cliente de prueba';
+const CLIENTE_DOCUMENTO = '123456789';
+const PRODUCTO_NOMBRE = 'Café de prueba';
 
 const producto = {
   id: PRODUCTO_ID,
   sku: 'SKU-001',
-  nombre: 'Café de prueba',
+  nombre: PRODUCTO_NOMBRE,
   precio: 100,
   tipo: 'producto',
 };
@@ -18,12 +21,21 @@ const producto = {
 const pedidoPagado = {
   id: PEDIDO_ID,
   clienteId: CLIENTE_ID,
+  clienteNombre: CLIENTE_NOMBRE,
+  clienteDocumento: CLIENTE_DOCUMENTO,
   estado: 'Pagado',
   subtotal: 200,
   descuento: 0,
   impuesto: 0,
   total: 200,
-  items: [{ productoId: PRODUCTO_ID, cantidad: 2, precioUnitario: 100 }],
+  items: [
+    {
+      productoId: PRODUCTO_ID,
+      productoNombre: PRODUCTO_NOMBRE,
+      cantidad: 2,
+      precioUnitario: 100,
+    },
+  ],
 };
 
 function respuestaJson(body: unknown, status = 200): Response {
@@ -46,7 +58,9 @@ function urlDe(input: RequestInfo | URL): string {
   return input.url;
 }
 
-function instalarFetch(): ReturnType<typeof vi.fn> {
+function instalarFetch(
+  opciones: { pedidosConItems?: boolean } = {},
+): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(
     (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const url = urlDe(input);
@@ -65,8 +79,18 @@ function instalarFetch(): ReturnType<typeof vi.fn> {
         );
       }
 
+      if (url === `/api/pedidos/${PEDIDO_ID}`) {
+        return Promise.resolve(respuestaJson(pedidoPagado));
+      }
+
       if (url === '/api/pedidos') {
-        return Promise.resolve(respuestaJson([pedidoPagado]));
+        return Promise.resolve(
+          respuestaJson([
+            opciones.pedidosConItems
+              ? pedidoPagado
+              : { ...pedidoPagado, items: undefined },
+          ]),
+        );
       }
 
       if (url === `/api/pedidos/${PEDIDO_ID}/emitir` && init?.method === 'POST') {
@@ -124,15 +148,85 @@ describe('App', () => {
       await screen.findByRole('heading', { level: 2, name: 'Historial de ventas' }),
     ).toBeInTheDocument();
     expect(await screen.findByText(PEDIDO_ID)).toBeInTheDocument();
-    expect(screen.getByText(CLIENTE_ID)).toBeInTheDocument();
-    expect(screen.getByText('Pagado')).toBeInTheDocument();
     const tabla = screen.getByRole('table');
+    expect(within(tabla).getByText(CLIENTE_NOMBRE)).toBeInTheDocument();
+    expect(within(tabla).queryByText(CLIENTE_DOCUMENTO)).not.toBeInTheDocument();
+    expect(screen.getByText('Pagado')).toBeInTheDocument();
     expect(within(tabla).getByText(/200/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Nueva Venta' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Volver a Ventas' })).toHaveAttribute(
+      'href',
+      '/ventas',
+    );
+    const historial = screen.getByRole('region', { name: 'Pedidos' });
+    expect(
+      within(historial).getByRole('button', { name: 'Nueva Venta' }),
+    ).toBeInTheDocument();
+  });
+
+  it('abre el detalle de una venta y consulta el pedido cuando faltan los ítems', async () => {
+    const fetchMock = instalarFetch();
+
+    render(<App />);
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: `Ver detalles del pedido ${PEDIDO_ID}`,
+      }),
+    );
+
+    const dialogo = await screen.findByRole('dialog', {
+      name: 'Detalle de la venta',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(`/api/pedidos/${PEDIDO_ID}`);
+
+    expect(within(dialogo).getByText(PEDIDO_ID)).toBeInTheDocument();
+    expect(within(dialogo).getByText(CLIENTE_NOMBRE)).toBeInTheDocument();
+    expect(
+      within(dialogo).getByText(`Documento: ${CLIENTE_DOCUMENTO}`),
+    ).toBeInTheDocument();
+    expect(within(dialogo).getAllByText('Pagado').length).toBeGreaterThan(0);
+    expect(within(dialogo).getByText('Subtotal')).toBeInTheDocument();
+    expect(within(dialogo).getByText('Descuento')).toBeInTheDocument();
+    expect(within(dialogo).getByText('Impuesto')).toBeInTheDocument();
+    expect(within(dialogo).getByText('Total')).toBeInTheDocument();
+
+    const items = within(dialogo).getByRole('table');
+    expect(within(items).getByText(PRODUCTO_NOMBRE)).toBeInTheDocument();
+    expect(within(items).queryByText(PRODUCTO_ID)).not.toBeInTheDocument();
+    expect(within(items).getByText('2')).toBeInTheDocument();
+
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Cerrar' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('no consulta el detalle si el listado ya incluye los ítems', async () => {
+    const fetchMock = instalarFetch({ pedidosConItems: true });
+
+    render(<App />);
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: `Ver detalles del pedido ${PEDIDO_ID}`,
+      }),
+    );
+
+    const dialogo = await screen.findByRole('dialog', {
+      name: 'Detalle de la venta',
+    });
+
+    expect(within(dialogo).getByText(PRODUCTO_NOMBRE)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith(`/api/pedidos/${PEDIDO_ID}`);
   });
 
   it('abre el POS de dos columnas con el catálogo y su stock', async () => {
     await abrirNuevaVenta();
+
+    expect(screen.getByRole('link', { name: 'Volver a Ventas' })).toHaveAttribute(
+      'href',
+      '/ventas',
+    );
 
     const catalogo = screen.getByRole('region', { name: 'Catálogo' });
     const carrito = screen.getByRole('region', { name: 'Carrito' });

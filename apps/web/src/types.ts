@@ -13,6 +13,7 @@ export interface StockItem {
 
 export interface PedidoItem {
   productoId: string;
+  productoNombre?: string;
   cantidad: number;
   precioUnitario: number;
 }
@@ -20,10 +21,12 @@ export interface PedidoItem {
 export interface Pedido {
   id: string;
   clienteId: string;
+  clienteNombre?: string;
+  clienteDocumento?: string;
   estado: string;
   subtotal: number;
   descuento: number;
   impuesto: number;
   total: number;
-  items: PedidoItem[];
+  items?: PedidoItem[];
 }
