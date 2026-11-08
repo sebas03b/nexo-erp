@@ -13,6 +13,10 @@ const productoSchema = z.object({
 
 const actualizarProductoSchema = productoSchema.partial();
 
+const actualizarProductoConStockSchema = actualizarProductoSchema.extend({
+  stock: z.coerce.number().int().nonnegative().optional(),
+});
+
 const stockSchema = z.object({
   cantidad: z.coerce.number().int().nonnegative(),
 });
@@ -56,6 +60,13 @@ export const inventarioRoutes: FastifyPluginCallback<InventarioRoutesOptions> = 
     const data = actualizarProductoSchema.parse(request.body);
 
     return service.actualizarProducto(id, data);
+  });
+
+  app.put<{ Params: { id: string } }>('/api/productos/:id', async (request) => {
+    const { id } = productoParamsSchema.parse(request.params);
+    const data = actualizarProductoConStockSchema.parse(request.body);
+
+    return service.actualizarProductoConStock(id, data);
   });
 
   app.delete<{ Params: { id: string } }>('/api/productos/:id', async (request, reply) => {

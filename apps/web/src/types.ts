@@ -28,5 +28,6 @@ export interface Pedido {
   descuento: number;
   impuesto: number;
   total: number;
+  createdAt?: string;
   items?: PedidoItem[];
 }

@@ -253,6 +253,18 @@ h2 {
   text-transform: uppercase;
 }
 
+.ventas-tabla th,
+.ventas-tabla td {
+  text-align: center;
+}
+
+.acciones-tabla {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
 .cantidad-input {
   width: 5rem;
   min-width: 0;
@@ -542,9 +554,23 @@ button:disabled {
   margin-bottom: 1.25rem;
 }
 
-.detalle-items-tabla th:last-child,
-.detalle-items-tabla td:last-child {
+.detalle-items-tabla th,
+.detalle-items-tabla td {
+  vertical-align: middle;
+}
+
+.detalle-items-tabla th:first-child,
+.detalle-items-tabla td:first-child {
+  white-space: normal;
+}
+
+.detalle-items-tabla th:nth-child(2),
+.detalle-items-tabla td:nth-child(2),
+.detalle-items-tabla th:nth-child(3),
+.detalle-items-tabla td:nth-child(3) {
+  width: 9rem;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .modal-detalle .modal-actions {
@@ -743,6 +769,75 @@ button:disabled {
 
 .boton-eliminar:hover {
   background-color: #b91c1c;
+}
+
+.boton-icono,
+.boton-eliminar-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border-radius: 0.45rem;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.boton-icono {
+  border: 1px solid #334155;
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+.boton-icono:hover {
+  border-color: #38bdf8;
+  color: #7dd3fc;
+}
+
+.boton-eliminar-icono {
+  background-color: #dc2626;
+  color: #f8fafc;
+  font-weight: 800;
+}
+
+.boton-eliminar-icono:hover:not(:disabled) {
+  background-color: #b91c1c;
+}
+
+.boton-eliminar-pedido {
+  align-self: stretch;
+  width: 1.75rem;
+  height: auto;
+  min-height: 2rem;
+  padding: 0 0.35rem;
+  background-color: #dc2626;
+  color: #ffffff;
+}
+
+.boton-eliminar-pedido:hover:not(:disabled) {
+  background-color: #b91c1c;
+}
+
+.producto-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.producto-form-campo {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.producto-form-campo label {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.producto-form-campo input {
+  width: 100%;
+  min-width: 0;
 }
 
 .pos-totales {

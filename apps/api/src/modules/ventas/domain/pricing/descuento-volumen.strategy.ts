@@ -5,13 +5,12 @@ import { redondearMoneda } from '../dinero.js';
 import type { DescuentoContexto, DescuentoStrategy } from './descuento.strategy.js';
 
 export interface TramoDescuentoVolumen {
-  readonly subtotalMinimo: number;
+  readonly cantidadMinima: number;
   readonly porcentaje: number;
 }
 
 const TRAMOS_POR_DEFECTO: readonly TramoDescuentoVolumen[] = [
-  { subtotalMinimo: 1000, porcentaje: 0.1 },
-  { subtotalMinimo: 500, porcentaje: 0.05 },
+  { cantidadMinima: 11, porcentaje: 0.1 },
 ];
 
 export class DescuentoPorVolumen implements DescuentoStrategy {
@@ -21,7 +20,7 @@ export class DescuentoPorVolumen implements DescuentoStrategy {
   constructor(tramos: readonly TramoDescuentoVolumen[] = TRAMOS_POR_DEFECTO) {
     for (const tramo of tramos) {
       if (
-        tramo.subtotalMinimo < 0 ||
+        tramo.cantidadMinima < 0 ||
         tramo.porcentaje < 0 ||
         tramo.porcentaje > 1
       ) {
@@ -32,12 +31,14 @@ export class DescuentoPorVolumen implements DescuentoStrategy {
       }
     }
 
-    this.#tramos = [...tramos].sort((a, b) => b.subtotalMinimo - a.subtotalMinimo);
+    this.#tramos = [...tramos].sort(
+      (a, b) => b.cantidadMinima - a.cantidadMinima,
+    );
   }
 
-  calcular({ subtotal }: DescuentoContexto): number {
+  calcular({ subtotal, cantidadTotal }: DescuentoContexto): number {
     const tramo = this.#tramos.find(
-      ({ subtotalMinimo }) => subtotal >= subtotalMinimo,
+      ({ cantidadMinima }) => cantidadTotal >= cantidadMinima,
     );
 
     if (!tramo) {

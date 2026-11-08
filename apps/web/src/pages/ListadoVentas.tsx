@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
-import { obtenerJson } from '../lib/api';
-import { formatearMoneda } from '../lib/formato';
+import { eliminarRecurso, obtenerJson } from '../lib/api';
+import { formatearFechaHora, formatearMoneda } from '../lib/formato';
 import type { Pedido } from '../types';
 
 interface EstadoNavegacion {
@@ -23,6 +23,8 @@ export function ListadoVentas(): JSX.Element {
   const [detalle, setDetalle] = useState<Pedido | null>(null);
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
   const [errorDetalle, setErrorDetalle] = useState<string | null>(null);
+  const [errorAccion, setErrorAccion] = useState<string | null>(null);
+  const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const solicitudDetalle = useRef(0);
   const mensaje = (location.state as EstadoNavegacion | null)?.mensaje ?? null;
 
@@ -103,6 +105,39 @@ export function ListadoVentas(): JSX.Element {
     setCargandoDetalle(false);
   }
 
+  async function eliminarPedido(pedido: Pedido): Promise<void> {
+    const confirmado = window.confirm(
+      `¿Eliminar el pedido ${pedido.id}? Esta acción no se puede deshacer.`,
+    );
+
+    if (!confirmado) {
+      return;
+    }
+
+    setErrorAccion(null);
+    setEliminandoId(pedido.id);
+
+    try {
+      await eliminarRecurso(`/api/pedidos/${pedido.id}`);
+      setPedidos((actuales) =>
+        actuales.filter((actual) => actual.id !== pedido.id),
+      );
+      setRecarga((valor) => valor + 1);
+
+      if (detalle?.id === pedido.id) {
+        cerrarDetalle();
+      }
+    } catch (caught) {
+      setErrorAccion(
+        caught instanceof Error
+          ? caught.message
+          : 'No se pudo eliminar el pedido',
+      );
+    } finally {
+      setEliminandoId(null);
+    }
+  }
+
   return (
     <div className="pagina">
       <header className="pagina-header">
@@ -143,6 +178,12 @@ export function ListadoVentas(): JSX.Element {
         </p>
       ) : null}
 
+      {errorAccion ? (
+        <p role="alert" className="alert alert-error">
+          {errorAccion}
+        </p>
+      ) : null}
+
       <section className="app-card" aria-labelledby="historial-titulo">
         <div className="seccion-cabecera">
           <h3 id="historial-titulo" className="seccion-titulo">
@@ -175,12 +216,11 @@ export function ListadoVentas(): JSX.Element {
           <p className="app-empty">No hay ventas registradas.</p>
         ) : (
           <div className="tabla-contenedor">
-            <table className="productos-tabla">
+            <table className="productos-tabla ventas-tabla">
               <thead>
                 <tr>
-                  <th scope="col">Pedido</th>
+                  <th scope="col">Fecha</th>
                   <th scope="col">Cliente</th>
-                  <th scope="col">Ítems</th>
                   <th scope="col">Estado</th>
                   <th scope="col">Total</th>
                   <th scope="col">Acciones</th>
@@ -189,9 +229,12 @@ export function ListadoVentas(): JSX.Element {
               <tbody>
                 {pedidos.map((pedido) => (
                   <tr key={pedido.id}>
-                    <td className="celda-id">{pedido.id}</td>
+                    <td>
+                      {pedido.createdAt
+                        ? formatearFechaHora(pedido.createdAt)
+                        : '—'}
+                    </td>
                     <td>{nombreCliente(pedido)}</td>
-                    <td>{pedido.items?.length ?? '—'}</td>
                     <td>
                       <span
                         className={`estado estado-${pedido.estado.toLowerCase()}`}
@@ -201,16 +244,30 @@ export function ListadoVentas(): JSX.Element {
                     </td>
                     <td>{formatearMoneda(pedido.total)}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="boton-secundario boton-compacto"
-                        aria-label={`Ver detalles del pedido ${pedido.id}`}
-                        onClick={() => {
-                          void abrirDetalle(pedido);
-                        }}
-                      >
-                        Detalles
-                      </button>
+                      <div className="acciones-tabla">
+                        <button
+                          type="button"
+                          className="boton-secundario boton-compacto"
+                          aria-label={`Ver detalles del pedido ${pedido.id}`}
+                          onClick={() => {
+                            void abrirDetalle(pedido);
+                          }}
+                        >
+                          Detalles
+                        </button>
+                        <button
+                          type="button"
+                          className="boton-eliminar-icono boton-eliminar-pedido"
+                          aria-label={`Eliminar pedido ${pedido.id}`}
+                          title="Eliminar pedido"
+                          disabled={eliminandoId === pedido.id}
+                          onClick={() => {
+                            void eliminarPedido(pedido);
+                          }}
+                        >
+                          {eliminandoId === pedido.id ? '…' : '✕'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -266,6 +323,39 @@ export function ListadoVentas(): JSX.Element {
               </div>
             </dl>
 
+            <h4 className="detalle-subtitulo">Ítems</h4>
+
+            {cargandoDetalle ? (
+              <p className="app-empty">Cargando ítems…</p>
+            ) : errorDetalle ? (
+              <p role="alert" className="alert alert-error">
+                {errorDetalle}
+              </p>
+            ) : (detalle.items?.length ?? 0) === 0 ? (
+              <p className="app-empty">Este pedido no tiene ítems registrados.</p>
+            ) : (
+              <div className="tabla-contenedor">
+                <table className="productos-tabla detalle-items-tabla">
+                  <thead>
+                    <tr>
+                      <th scope="col">Producto</th>
+                      <th scope="col">Cantidad</th>
+                      <th scope="col">Valor unitario</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detalle.items?.map((item) => (
+                      <tr key={item.productoId}>
+                        <td>{item.productoNombre ?? item.productoId}</td>
+                        <td>{item.cantidad}</td>
+                        <td>{formatearMoneda(item.precioUnitario)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
             <h4 className="detalle-subtitulo">Desglose financiero</h4>
             <dl className="detalle-financiero">
               <div>
@@ -285,37 +375,6 @@ export function ListadoVentas(): JSX.Element {
                 <dd>{formatearMoneda(detalle.total)}</dd>
               </div>
             </dl>
-
-            <h4 className="detalle-subtitulo">Ítems</h4>
-
-            {cargandoDetalle ? (
-              <p className="app-empty">Cargando ítems…</p>
-            ) : errorDetalle ? (
-              <p role="alert" className="alert alert-error">
-                {errorDetalle}
-              </p>
-            ) : (detalle.items?.length ?? 0) === 0 ? (
-              <p className="app-empty">Este pedido no tiene ítems registrados.</p>
-            ) : (
-              <div className="tabla-contenedor">
-                <table className="productos-tabla detalle-items-tabla">
-                  <thead>
-                    <tr>
-                      <th scope="col">Producto</th>
-                      <th scope="col">Cantidad</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detalle.items?.map((item) => (
-                      <tr key={item.productoId}>
-                        <td>{item.productoNombre ?? item.productoId}</td>
-                        <td>{item.cantidad}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
 
             <div className="modal-actions">
               <button

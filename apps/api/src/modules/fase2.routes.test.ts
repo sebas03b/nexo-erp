@@ -208,6 +208,89 @@ describe('Endpoints REST de inventario y ventas', () => {
     expect(listadoFinal.json<ProductoJson[]>()).toEqual([]);
   });
 
+  it('actualiza nombre, precio y stock con PUT /api/productos/:id', async () => {
+    const producto = await crearProducto(100);
+
+    const actualizacion = await app.inject({
+      method: 'PUT',
+      url: `/api/productos/${producto.id}`,
+      payload: {
+        nombre: 'Café actualizado',
+        precio: 250,
+        stock: 7,
+      },
+    });
+
+    expect(actualizacion.statusCode).toBe(200);
+    expect(actualizacion.json<ProductoJson>()).toMatchObject({
+      id: producto.id,
+      nombre: 'Café actualizado',
+      precio: 250,
+    });
+
+    const stock = await app.inject({
+      method: 'GET',
+      url: `/api/stock/${producto.id}`,
+    });
+    expect(stock.statusCode).toBe(200);
+    expect(stock.json()).toEqual({ productoId: producto.id, cantidad: 7 });
+  });
+
+  it('elimina un pedido sin factura y rechaza el que ya tiene factura', async () => {
+    const pedidoBorrador = await crearPedidoBorrador();
+
+    const eliminacion = await app.inject({
+      method: 'DELETE',
+      url: `/api/pedidos/${pedidoBorrador.id}`,
+    });
+    expect(eliminacion.statusCode).toBe(204);
+
+    const consulta = await app.inject({
+      method: 'GET',
+      url: `/api/pedidos/${pedidoBorrador.id}`,
+    });
+    expect(consulta.statusCode).toBe(404);
+
+    const pedidoPagado = await crearPedidoPagado();
+    const factura = await app.inject({
+      method: 'POST',
+      url: `/api/pedidos/${pedidoPagado.id}/factura`,
+    });
+    expect(factura.statusCode).toBe(201);
+
+    const eliminacionBloqueada = await app.inject({
+      method: 'DELETE',
+      url: `/api/pedidos/${pedidoPagado.id}`,
+    });
+    expect(eliminacionBloqueada.statusCode).toBe(409);
+    expect(eliminacionBloqueada.json()).toMatchObject({
+      error: { code: 'PEDIDO_EN_USO' },
+    });
+  });
+
+  it('rechaza eliminar un producto que hace parte de un pedido', async () => {
+    const producto = await crearProducto(100);
+
+    const creacion = await app.inject({
+      method: 'POST',
+      url: '/api/pedidos',
+      payload: {
+        documentoCliente: DOCUMENTO_CLIENTE,
+        items: [{ productoId: producto.id, cantidad: 1 }],
+      },
+    });
+    expect(creacion.statusCode).toBe(201);
+
+    const eliminacion = await app.inject({
+      method: 'DELETE',
+      url: `/api/productos/${producto.id}`,
+    });
+    expect(eliminacion.statusCode).toBe(409);
+    expect(eliminacion.json()).toMatchObject({
+      error: { code: 'PRODUCTO_EN_USO' },
+    });
+  });
+
   it('crea pedidos, controla sus transiciones y emite la factura', async () => {
     const producto = await crearProducto(100);
 
@@ -361,7 +444,7 @@ describe('Endpoints REST de inventario y ventas', () => {
       db,
       estrategiasVentas: {
         descuento: new DescuentoPorVolumen([
-          { subtotalMinimo: 100, porcentaje: 0.1 },
+          { cantidadMinima: 2, porcentaje: 0.1 },
         ]),
         impuesto: new ImpuestoIva(0.19),
         pagos: {

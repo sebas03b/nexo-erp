@@ -89,8 +89,15 @@ export function NuevaVenta(): JSX.Element {
       0,
     ),
   );
+  const cantidadTotal = lineas.reduce(
+    (acumulado, linea) => acumulado + linea.cantidad,
+    0,
+  );
+  const descuento = redondearMoneda(
+    cantidadTotal > 10 ? subtotal * 0.1 : 0,
+  );
   const impuesto = 0;
-  const total = redondearMoneda(subtotal + impuesto);
+  const total = redondearMoneda(subtotal - descuento + impuesto);
 
   async function procesarVenta(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -240,6 +247,10 @@ export function NuevaVenta(): JSX.Element {
             <div>
               <dt>Subtotal</dt>
               <dd>{formatearMoneda(subtotal)}</dd>
+            </div>
+            <div>
+              <dt>Descuento</dt>
+              <dd>{formatearMoneda(descuento)}</dd>
             </div>
             <div>
               <dt>Impuesto</dt>

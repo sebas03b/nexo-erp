@@ -22,7 +22,7 @@ describe('Patrón Strategy en el cálculo del pedido', () => {
       },
       {
         descuento: new DescuentoPorVolumen([
-          { subtotalMinimo: 500, porcentaje: 0.1 },
+          { cantidadMinima: 5, porcentaje: 0.1 },
         ]),
         impuesto: new ImpuestoExento(),
       },
@@ -70,28 +70,66 @@ describe('Patrón Strategy en el cálculo del pedido', () => {
     });
   });
 
+  it('aplica el descuento por volumen solo cuando la cantidad supera 10 unidades', () => {
+    const estrategia = new DescuentoPorVolumen();
+
+    for (const cantidadTotal of [1, 10]) {
+      expect(
+        estrategia.calcular({
+          subtotal: 1000,
+          cantidadTotal,
+          esClienteFrecuente: false,
+        }),
+      ).toBe(0);
+    }
+
+    expect(
+      estrategia.calcular({
+        subtotal: 1000,
+        cantidadTotal: 11,
+        esClienteFrecuente: false,
+      }),
+    ).toBe(100);
+  });
+
   it('aplica el tramo de volumen más alto que corresponda', () => {
     const estrategia = new DescuentoPorVolumen([
-      { subtotalMinimo: 500, porcentaje: 0.05 },
-      { subtotalMinimo: 1000, porcentaje: 0.1 },
+      { cantidadMinima: 11, porcentaje: 0.1 },
+      { cantidadMinima: 21, porcentaje: 0.15 },
     ]);
 
     expect(
-      estrategia.calcular({ subtotal: 999, esClienteFrecuente: false }),
-    ).toBe(49.95);
-    expect(
-      estrategia.calcular({ subtotal: 1000, esClienteFrecuente: false }),
+      estrategia.calcular({
+        subtotal: 1000,
+        cantidadTotal: 20,
+        esClienteFrecuente: false,
+      }),
     ).toBe(100);
+    expect(
+      estrategia.calcular({
+        subtotal: 1000,
+        cantidadTotal: 21,
+        esClienteFrecuente: false,
+      }),
+    ).toBe(150);
   });
 
   it('solo aplica el descuento de cliente frecuente a quien está marcado', () => {
     const estrategia = new DescuentoClienteFrecuente(0.1);
 
     expect(
-      estrategia.calcular({ subtotal: 1000, esClienteFrecuente: false }),
+      estrategia.calcular({
+        subtotal: 1000,
+        cantidadTotal: 1,
+        esClienteFrecuente: false,
+      }),
     ).toBe(0);
     expect(
-      estrategia.calcular({ subtotal: 1000, esClienteFrecuente: true }),
+      estrategia.calcular({
+        subtotal: 1000,
+        cantidadTotal: 1,
+        esClienteFrecuente: true,
+      }),
     ).toBe(100);
   });
 
@@ -99,7 +137,11 @@ describe('Patrón Strategy en el cálculo del pedido', () => {
     const estrategia = new DescuentoPromocion({ porcentaje: 0.25 });
 
     expect(
-      estrategia.calcular({ subtotal: 200, esClienteFrecuente: false }),
+      estrategia.calcular({
+        subtotal: 200,
+        cantidadTotal: 1,
+        esClienteFrecuente: false,
+      }),
     ).toBe(50);
   });
 });

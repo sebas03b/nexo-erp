@@ -2,6 +2,7 @@
 
 export interface DescuentoContexto {
   readonly subtotal: number;
+  readonly cantidadTotal: number;
   readonly esClienteFrecuente: boolean;
 }
 

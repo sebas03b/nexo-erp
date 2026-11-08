@@ -61,11 +61,18 @@ export const ventasRoutes: FastifyPluginCallback<VentasRoutesOptions> = (
     return service.obtenerPedidoDetalle(id);
   });
 
-  app.post('/api/pedidos', async (request, reply) => {
+  app.post<{ Params: { id: string } }>('/api/pedidos', async (request, reply) => {
     const data = crearPedidoSchema.parse(request.body);
     const pedido = await service.crearPedido(data);
 
     return reply.code(201).send(pedido);
+  });
+
+  app.delete<{ Params: { id: string } }>('/api/pedidos/:id', async (request, reply) => {
+    const { id } = pedidoParamsSchema.parse(request.params);
+    await service.eliminarPedido(id);
+
+    return reply.code(204).send();
   });
 
   app.post<{ Params: { id: string } }>('/api/pedidos/:id/emitir', async (request) => {

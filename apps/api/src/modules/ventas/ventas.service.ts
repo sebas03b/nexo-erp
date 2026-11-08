@@ -152,6 +152,16 @@ export class VentasService {
     return pedido;
   }
 
+  async eliminarPedido(id: string): Promise<void> {
+    await this.obtenerPedido(id);
+
+    const eliminado = await this.#repository.eliminarPedido(id);
+
+    if (!eliminado) {
+      throw new RecursoNoEncontrado('PEDIDO_NO_ENCONTRADO', 'Pedido no encontrado');
+    }
+  }
+
   async emitirPedido(id: string): Promise<Pedido> {
     const pedido = await this.obtenerPedido(id);
     const estadoEsperado = pedido.estado;

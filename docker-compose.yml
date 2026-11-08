@@ -7,6 +7,12 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-nexo}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexo}
       POSTGRES_DB: ${POSTGRES_DB:-nexo_erp}
+      TZ: America/Bogota
+      PGTZ: America/Bogota
+    command:
+      - postgres
+      - -c
+      - timezone=America/Bogota
     ports:
       - "5434:5432"
     volumes:

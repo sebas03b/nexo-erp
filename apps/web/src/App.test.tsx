@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from './App';
@@ -28,6 +28,7 @@ const pedidoPagado = {
   descuento: 0,
   impuesto: 0,
   total: 200,
+  createdAt: '2026-11-08T01:05:00.000Z',
   items: [
     {
       productoId: PRODUCTO_ID,
@@ -59,8 +60,14 @@ function urlDe(input: RequestInfo | URL): string {
 }
 
 function instalarFetch(
-  opciones: { pedidosConItems?: boolean } = {},
+  opciones: {
+    pedidosConItems?: boolean;
+    stockCantidad?: number;
+    errorEliminarProducto?: boolean;
+    errorEliminarPedido?: boolean;
+  } = {},
 ): ReturnType<typeof vi.fn> {
+  let pedidoEliminado = false;
   const fetchMock = vi.fn(
     (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const url = urlDe(input);
@@ -69,8 +76,49 @@ function instalarFetch(
         return Promise.resolve(respuestaJson([producto]));
       }
 
+      if (url === `/api/productos/${PRODUCTO_ID}` && init?.method === 'PUT') {
+        return Promise.resolve(
+          respuestaJson({
+            ...producto,
+            nombre: 'Café actualizado',
+            precio: 250,
+          }),
+        );
+      }
+
+      if (url === `/api/productos/${PRODUCTO_ID}` && init?.method === 'DELETE') {
+        if (opciones.errorEliminarProducto) {
+          return Promise.resolve(
+            respuestaJson(
+              {
+                error: {
+                  message:
+                    'El producto está referenciado por otros registros',
+                },
+              },
+              409,
+            ),
+          );
+        }
+
+        return Promise.resolve(respuestaJson({}, 204));
+      }
+
       if (url === '/api/stock') {
-        return Promise.resolve(respuestaJson([{ productoId: producto.id, cantidad: 4 }]));
+        return Promise.resolve(
+          respuestaJson([
+            {
+              productoId: producto.id,
+              cantidad: opciones.stockCantidad ?? 4,
+            },
+          ]),
+        );
+      }
+
+      if (url === `/api/stock/${PRODUCTO_ID}` && init?.method === 'PUT') {
+        return Promise.resolve(
+          respuestaJson({ productoId: PRODUCTO_ID, cantidad: 7 }),
+        );
       }
 
       if (url === '/api/pedidos' && init?.method === 'POST') {
@@ -79,11 +127,35 @@ function instalarFetch(
         );
       }
 
+      if (url === `/api/pedidos/${PEDIDO_ID}` && init?.method === 'DELETE') {
+        if (opciones.errorEliminarPedido) {
+          return Promise.resolve(
+            respuestaJson(
+              {
+                error: {
+                  message:
+                    'El pedido tiene una factura asociada y no se puede eliminar',
+                },
+              },
+              409,
+            ),
+          );
+        }
+
+        pedidoEliminado = true;
+
+        return Promise.resolve(respuestaJson({}, 204));
+      }
+
       if (url === `/api/pedidos/${PEDIDO_ID}`) {
         return Promise.resolve(respuestaJson(pedidoPagado));
       }
 
       if (url === '/api/pedidos') {
+        if (pedidoEliminado) {
+          return Promise.resolve(respuestaJson([]));
+        }
+
         return Promise.resolve(
           respuestaJson([
             opciones.pedidosConItems
@@ -133,6 +205,7 @@ describe('App', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it('muestra la identidad de Nexo-ERP', () => {
@@ -147,8 +220,11 @@ describe('App', () => {
     expect(
       await screen.findByRole('heading', { level: 2, name: 'Historial de ventas' }),
     ).toBeInTheDocument();
-    expect(await screen.findByText(PEDIDO_ID)).toBeInTheDocument();
+    expect(await screen.findByText('Fecha')).toBeInTheDocument();
+    expect(await screen.findByText('07/11/2026 20:05')).toBeInTheDocument();
     const tabla = screen.getByRole('table');
+    expect(within(tabla).queryByRole('columnheader', { name: 'Ítems' })).not.toBeInTheDocument();
+    expect(within(tabla).queryByText(PEDIDO_ID)).not.toBeInTheDocument();
     expect(within(tabla).getByText(CLIENTE_NOMBRE)).toBeInTheDocument();
     expect(within(tabla).queryByText(CLIENTE_DOCUMENTO)).not.toBeInTheDocument();
     expect(screen.getByText('Pagado')).toBeInTheDocument();
@@ -192,9 +268,11 @@ describe('App', () => {
     expect(within(dialogo).getByText('Total')).toBeInTheDocument();
 
     const items = within(dialogo).getByRole('table');
+    expect(within(items).getByText('Valor unitario')).toBeInTheDocument();
     expect(within(items).getByText(PRODUCTO_NOMBRE)).toBeInTheDocument();
     expect(within(items).queryByText(PRODUCTO_ID)).not.toBeInTheDocument();
     expect(within(items).getByText('2')).toBeInTheDocument();
+    expect(within(items).getByText(/100,00/)).toBeInTheDocument();
 
     fireEvent.click(within(dialogo).getByRole('button', { name: 'Cerrar' }));
 
@@ -267,6 +345,31 @@ describe('App', () => {
     expect(within(carrito).getByText('Agrega productos desde el catálogo.')).toBeInTheDocument();
   });
 
+  it('aplica un descuento del 10% solo cuando el carrito supera 10 unidades', async () => {
+    instalarFetch({ stockCantidad: 20 });
+
+    await abrirNuevaVenta();
+
+    const catalogo = screen.getByRole('region', { name: 'Catálogo' });
+    const carrito = screen.getByRole('region', { name: 'Carrito' });
+
+    fireEvent.click(within(catalogo).getByRole('button', { name: 'Agregar' }));
+
+    const cantidad = within(carrito).getByLabelText('Cantidad de Café de prueba');
+    const descuento = within(carrito).getByText('Descuento');
+    const totalVenta = carrito.querySelector('.pos-total dd');
+
+    fireEvent.change(cantidad, { target: { value: '10' } });
+
+    expect(descuento.nextElementSibling).toHaveTextContent('0');
+    expect(totalVenta).toHaveTextContent('1.000');
+
+    fireEvent.change(cantidad, { target: { value: '11' } });
+
+    expect(descuento.nextElementSibling).toHaveTextContent('110');
+    expect(totalVenta).toHaveTextContent('990');
+  });
+
   it('procesa la venta con el flujo crear, emitir y pagar usando los UUID correctos', async () => {
     const fetchMock = instalarFetch();
 
@@ -331,6 +434,151 @@ describe('App', () => {
       '/api/pedidos',
       expect.objectContaining({ method: 'POST' }),
     );
+  });
+
+  it('elimina una venta después de confirmar y refresca el historial', async () => {
+    const fetchMock = instalarFetch();
+    const confirmacion = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(<App />);
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: `Eliminar pedido ${PEDIDO_ID}`,
+      }),
+    );
+
+    expect(confirmacion).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(`/api/pedidos/${PEDIDO_ID}`, {
+        method: 'DELETE',
+      });
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', {
+          name: `Eliminar pedido ${PEDIDO_ID}`,
+        }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it('muestra una alerta amigable si la venta no se puede eliminar', async () => {
+    instalarFetch({ errorEliminarPedido: true });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(<App />);
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: `Eliminar pedido ${PEDIDO_ID}`,
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        'El pedido tiene una factura asociada y no se puede eliminar',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', {
+        name: `Eliminar pedido ${PEDIDO_ID}`,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('edita nombre, precio y stock de un producto desde el modal', async () => {
+    const fetchMock = instalarFetch();
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('link', { name: 'Productos y Stock' }));
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Productos y Stock' }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText(PRODUCTO_NOMBRE)).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: `Editar ${PRODUCTO_NOMBRE}` }),
+    );
+
+    const dialogo = await screen.findByRole('dialog', {
+      name: 'Editar producto',
+    });
+
+    fireEvent.change(within(dialogo).getByLabelText('Nombre'), {
+      target: { value: 'Café actualizado' },
+    });
+    fireEvent.change(within(dialogo).getByLabelText('Precio'), {
+      target: { value: '250' },
+    });
+    fireEvent.change(within(dialogo).getByLabelText('Stock actual'), {
+      target: { value: '7' },
+    });
+    fireEvent.click(
+      within(dialogo).getByRole('button', { name: 'Guardar cambios' }),
+    );
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/productos/${PRODUCTO_ID}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nombre: 'Café actualizado',
+            precio: 250,
+            stock: 7,
+          }),
+        },
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
+
+  it('elimina un producto después de confirmar', async () => {
+    const fetchMock = instalarFetch();
+    const confirmacion = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('link', { name: 'Productos y Stock' }));
+    const botonEliminar = await screen.findByRole('button', {
+      name: `Eliminar ${PRODUCTO_NOMBRE}`,
+    });
+
+    fireEvent.click(botonEliminar);
+
+    expect(confirmacion).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/productos/${PRODUCTO_ID}`,
+        { method: 'DELETE' },
+      );
+    });
+  });
+
+  it('muestra una alerta amigable si el producto está en uso', async () => {
+    instalarFetch({ errorEliminarProducto: true });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('link', { name: 'Productos y Stock' }));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: `Eliminar ${PRODUCTO_NOMBRE}`,
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        'El producto está referenciado por otros registros',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('navega entre Ventas, Productos y Clientes resaltando la pestaña activa', async () => {

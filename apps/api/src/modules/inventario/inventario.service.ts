@@ -6,13 +6,16 @@ import type {
   InventarioRepository,
 } from './inventario.repository.js';
 
+export type ActualizarProductoConStockData = ActualizarProductoData & {
+  readonly stock?: number;
+};
+
 export class InventarioService {
   readonly #repository: InventarioRepository;
 
   constructor(repository: InventarioRepository) {
     this.#repository = repository;
   }
-
   listarProductos(): Promise<Producto[]> {
     return this.#repository.listarProductos();
   }
@@ -58,6 +61,20 @@ export class InventarioService {
 
     if (!actualizado) {
       throw new RecursoNoEncontrado('PRODUCTO_NO_ENCONTRADO', 'Producto no encontrado');
+    }
+
+    return actualizado;
+  }
+
+  async actualizarProductoConStock(
+    id: string,
+    data: ActualizarProductoConStockData,
+  ): Promise<Producto> {
+    const { stock, ...producto } = data;
+    const actualizado = await this.actualizarProducto(id, producto);
+
+    if (stock !== undefined) {
+      await this.#repository.fijarStock(id, stock);
     }
 
     return actualizado;

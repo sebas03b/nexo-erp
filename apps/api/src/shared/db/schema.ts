@@ -48,6 +48,7 @@ export interface PedidosTable {
   descuento: NumericColumn;
   impuesto: NumericColumn;
   total: NumericColumn;
+  created_at: Generated<Date>;
 }
 
 export interface PedidoItemsTable {

@@ -100,9 +100,14 @@ export class Pedido {
         0,
       ),
     );
+    const cantidadTotal = items.reduce(
+      (acumulado, item) => acumulado + item.cantidad,
+      0,
+    );
     const descuento = redondearMoneda(
       estrategias.descuento.calcular({
         subtotal,
+        cantidadTotal,
         esClienteFrecuente: contexto.esClienteFrecuente ?? false,
       }),
     );

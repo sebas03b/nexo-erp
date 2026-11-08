@@ -18,10 +18,13 @@ describe('SqlFileMigrationProvider', () => {
       '0001_initial_schema',
       '0002_outbox_events',
       '0003_inventario_pedidos',
+      '0004_pedidos_created_at',
     ]);
     expect(typeof migrations['0002_outbox_events']?.up).toBe('function');
     expect(typeof migrations['0002_outbox_events']?.down).toBe('function');
     expect(typeof migrations['0003_inventario_pedidos']?.up).toBe('function');
     expect(typeof migrations['0003_inventario_pedidos']?.down).toBe('function');
+    expect(typeof migrations['0004_pedidos_created_at']?.up).toBe('function');
+    expect(typeof migrations['0004_pedidos_created_at']?.down).toBe('function');
   });
 });

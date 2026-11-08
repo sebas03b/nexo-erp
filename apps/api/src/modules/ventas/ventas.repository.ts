@@ -20,6 +20,7 @@ interface PedidoRow {
   descuento: string;
   impuesto: string;
   total: string;
+  created_at: Date;
 }
 
 interface PedidoDetalleRow extends PedidoRow {
@@ -68,6 +69,15 @@ const TRADUCCIONES_FACTURA: TraduccionesErrorBd = {
   '23505': {
     code: 'FACTURA_EXISTENTE',
     message: 'El pedido ya tiene una factura emitida',
+    statusCode: 409,
+  },
+};
+
+const TRADUCCIONES_ELIMINACION_PEDIDO: TraduccionesErrorBd = {
+  '23503': {
+    code: 'PEDIDO_EN_USO',
+    message:
+      'El pedido tiene una factura asociada y no se puede eliminar',
     statusCode: 409,
   },
 };
@@ -124,6 +134,7 @@ function mapPedidoDetalle(
     descuento: Number(row.descuento),
     impuesto: Number(row.impuesto),
     total: Number(row.total),
+    createdAt: row.created_at.toISOString(),
     items: [...items],
   };
 }
@@ -180,6 +191,19 @@ export class VentasRepository {
     }
   }
 
+  async eliminarPedido(id: string): Promise<boolean> {
+    try {
+      const result = await this.#db
+        .deleteFrom('pedidos')
+        .where('id', '=', id)
+        .executeTakeFirst();
+
+      return Number(result.numDeletedRows) > 0;
+    } catch (error) {
+      traducirErrorBd(error, TRADUCCIONES_ELIMINACION_PEDIDO);
+    }
+  }
+
   async listarPedidos(): Promise<PedidoDetalle[]> {
     const pedidoRows = await this.#db
       .selectFrom('pedidos')
@@ -192,10 +216,11 @@ export class VentasRepository {
         'pedidos.descuento',
         'pedidos.impuesto',
         'pedidos.total',
+        'pedidos.created_at',
         'clientes.nombre as cliente_nombre',
         'clientes.documento as cliente_documento',
       ])
-      .orderBy('pedidos.id')
+      .orderBy('pedidos.created_at', 'desc')
       .execute();
 
     if (pedidoRows.length === 0) {
@@ -262,6 +287,7 @@ export class VentasRepository {
         'pedidos.descuento',
         'pedidos.impuesto',
         'pedidos.total',
+        'pedidos.created_at',
         'clientes.nombre as cliente_nombre',
         'clientes.documento as cliente_documento',
       ])
