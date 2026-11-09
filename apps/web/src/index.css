@@ -708,6 +708,10 @@ button:disabled {
   gap: 0.35rem;
 }
 
+.pos-cliente {
+  position: relative;
+}
+
 .pos-cliente label,
 .pos-pago label {
   color: #94a3b8;
@@ -1109,4 +1113,39 @@ select {
   .modal-actions button {
     width: 100%;
   }
+}
+
+.pos-autocomplete-lista {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid #334155;
+  border-radius: 0.5rem;
+  background-color: #1e293b;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.5);
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.pos-autocomplete-opcion {
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid #334155;
+  color: #e2e8f0;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.pos-autocomplete-opcion:last-child {
+  border-bottom: none;
+}
+
+.pos-autocomplete-opcion:hover {
+  background-color: #334155;
+  color: #f8fafc;
 }

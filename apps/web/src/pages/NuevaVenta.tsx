@@ -1,11 +1,11 @@
-import { useState, type FormEvent, type JSX } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type JSX } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { useCatalogo } from '../hooks/useCatalogo';
-import { enviarJson } from '../lib/api';
+import { obtenerJson, enviarJson } from '../lib/api';
 import { formatearMoneda, redondearMoneda } from '../lib/formato';
 import { claseStock } from '../lib/stock';
-import type { Pedido, Producto } from '../types';
+import type { Cliente, Pedido, Producto } from '../types';
 
 type MetodoPago = 'efectivo' | 'pasarela';
 
@@ -26,6 +26,11 @@ export function NuevaVenta(): JSX.Element {
   const [metodoPago, setMetodoPago] = useState<MetodoPago>('efectivo');
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [cargandoClientes, setCargandoClientes] = useState(true);
+  const [errorClientes, setErrorClientes] = useState<string | null>(null);
+  const [mostrarDropdown, setMostrarDropdown] = useState(false);
+  const clienteInputRef = useRef<HTMLDivElement>(null);
 
   function cantidadEnCarrito(productoId: string): number {
     return lineas.find((linea) => linea.producto.id === productoId)?.cantidad ?? 0;
@@ -92,6 +97,65 @@ export function NuevaVenta(): JSX.Element {
       actuales.filter((linea) => linea.producto.id !== productoId),
     );
   }
+
+  useEffect(() => {
+    let activo = true;
+
+    async function cargarClientes(): Promise<void> {
+      setCargandoClientes(true);
+      setErrorClientes(null);
+
+      try {
+        const clientesApi = await obtenerJson<Cliente[]>('/api/clientes');
+
+        if (activo) {
+          setClientes(clientesApi);
+        }
+      } catch (caught) {
+        if (activo) {
+          setErrorClientes(
+            caught instanceof Error
+              ? caught.message
+              : 'No se pudieron cargar los clientes',
+          );
+        }
+      } finally {
+        if (activo) {
+          setCargandoClientes(false);
+        }
+      }
+    }
+
+    void cargarClientes();
+
+    return () => {
+      activo = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    function manejarClickFuera(event: MouseEvent): void {
+      if (
+        mostrarDropdown &&
+        clienteInputRef.current &&
+        !clienteInputRef.current.contains(event.target as Node)
+      ) {
+        setMostrarDropdown(false);
+      }
+    }
+
+    document.addEventListener('mousedown', manejarClickFuera);
+
+    return () => {
+      document.removeEventListener('mousedown', manejarClickFuera);
+    };
+  }, [mostrarDropdown]);
+
+  const clientesFiltrados = cargandoClientes
+    ? []
+    : clientes.filter((cliente) =>
+        cliente.documento.includes(documentoCliente.trim()),
+      );
 
   const cantidadTotal = lineas.reduce(
     (acumulado, linea) => acumulado + linea.cantidad,
@@ -199,6 +263,11 @@ export function NuevaVenta(): JSX.Element {
     }
   }
 
+  function seleccionarCliente(cliente: Cliente): void {
+    setDocumentoCliente(cliente.documento);
+    setMostrarDropdown(false);
+  }
+
   return (
     <div className="pagina pos-pagina">
       <header className="pagina-header">
@@ -233,6 +302,12 @@ export function NuevaVenta(): JSX.Element {
         </p>
       ) : null}
 
+      {errorClientes ? (
+        <p role="alert" className="alert alert-error">
+          {errorClientes}
+        </p>
+      ) : null}
+
       <div className="pos-grid">
         <section className="app-card pos-panel" aria-labelledby="carrito-titulo">
           <div className="seccion-cabecera">
@@ -244,7 +319,7 @@ export function NuevaVenta(): JSX.Element {
             </span>
           </div>
 
-          <div className="pos-cliente">
+          <div className="pos-cliente" ref={clienteInputRef}>
             <label htmlFor="pos-cliente">Documento del cliente</label>
             <input
               id="pos-cliente"
@@ -252,8 +327,28 @@ export function NuevaVenta(): JSX.Element {
               type="text"
               value={documentoCliente}
               placeholder="Número de documento"
-              onChange={(event) => setDocumentoCliente(event.target.value)}
+              onChange={(event) => {
+                setDocumentoCliente(event.target.value);
+                setMostrarDropdown(true);
+              }}
+              onFocus={() => setMostrarDropdown(true)}
             />
+
+            {mostrarDropdown &&
+              documentoCliente.trim() !== '' &&
+              clientesFiltrados.length > 0 && (
+                <ul className="pos-autocomplete-lista">
+                  {clientesFiltrados.map((cliente) => (
+                    <li
+                      key={cliente.id}
+                      className="pos-autocomplete-opcion"
+                      onClick={() => seleccionarCliente(cliente)}
+                    >
+                      {cliente.documento} - {cliente.nombre}
+                    </li>
+                  ))}
+                </ul>
+              )}
           </div>
 
           {lineas.length === 0 ? (

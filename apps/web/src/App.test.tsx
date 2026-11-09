@@ -59,18 +59,58 @@ function urlDe(input: RequestInfo | URL): string {
   return input.url;
 }
 
+const CLIENTES_POR_DEFECTO: Array<{
+  id: string;
+  nombre: string;
+  documento: string;
+  email: string | null;
+  telefono: string | null;
+  canal_preferido: string | null;
+}> = [
+  {
+    id: 'cliente-1',
+    nombre: 'Cliente Prueba',
+    documento: '12345678',
+    email: 'cliente@prueba.com',
+    telefono: '3000000000',
+    canal_preferido: 'whatsapp',
+  },
+  {
+    id: 'cliente-2',
+    nombre: 'Otro Cliente',
+    documento: '87654321',
+    email: null,
+    telefono: null,
+    canal_preferido: 'email',
+  },
+];
+
 function instalarFetch(
   opciones: {
     pedidosConItems?: boolean;
     stockCantidad?: number;
     errorEliminarProducto?: boolean;
     errorEliminarPedido?: boolean;
+    clientes?: Array<{
+      id: string;
+      nombre: string;
+      documento: string;
+      email: string | null;
+      telefono: string | null;
+      canal_preferido: string | null;
+    }>;
   } = {},
 ): ReturnType<typeof vi.fn> {
   let pedidoEliminado = false;
   const fetchMock = vi.fn(
     (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const url = urlDe(input);
+
+      if (url === '/api/clientes') {
+        return Promise.resolve(
+          respuestaJson(opciones.clientes ?? CLIENTES_POR_DEFECTO),
+        );
+      }
 
       if (url === '/api/productos') {
         return Promise.resolve(respuestaJson([producto]));
@@ -450,6 +490,41 @@ describe('App', () => {
       '/api/pedidos',
       expect.objectContaining({ method: 'POST' }),
     );
+  });
+
+  it('autocompleta el documento del cliente al seleccionar una opción del desplegable', async () => {
+    instalarFetch();
+
+    await abrirNuevaVenta();
+
+    const input = screen.getByLabelText('Documento del cliente');
+
+    fireEvent.change(input, { target: { value: '123' } });
+
+    const opcion = await screen.findByText('12345678 - Cliente Prueba');
+    expect(opcion).toBeInTheDocument();
+
+    fireEvent.click(opcion);
+
+    expect(input).toHaveValue('12345678');
+
+    // El menú debe cerrarse tras la selección
+    expect(screen.queryByText('12345678 - Cliente Prueba')).not.toBeInTheDocument();
+  });
+
+  it('filtra clientes por documento al escribir en el input', async () => {
+    instalarFetch();
+
+    await abrirNuevaVenta();
+
+    const input = screen.getByLabelText('Documento del cliente');
+
+    fireEvent.change(input, { target: { value: '8765' } });
+
+    expect(
+      await screen.findByText('87654321 - Otro Cliente'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('12345678 - Cliente Prueba')).not.toBeInTheDocument();
   });
 
   it('elimina una venta después de confirmar y refresca el historial', async () => {

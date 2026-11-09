@@ -11,6 +11,17 @@ export interface StockItem {
   cantidad: number;
 }
 
+export type CanalPreferido = 'email' | 'sms' | 'whatsapp';
+
+export interface Cliente {
+  id: string;
+  nombre: string;
+  documento: string;
+  email: string | null;
+  telefono: string | null;
+  canalPreferido: CanalPreferido;
+}
+
 export interface PedidoItem {
   productoId: string;
   productoNombre?: string;

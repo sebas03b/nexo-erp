@@ -4,6 +4,8 @@ import type { Kysely } from 'kysely';
 import { ZodError } from 'zod';
 
 import { env } from './config/env.js';
+import { ClientesRepository } from './modules/clientes/clientes.repository.js';
+import { clientesRoutes } from './modules/clientes/clientes.routes.js';
 import { InventarioRepository } from './modules/inventario/inventario.repository.js';
 import { inventarioRoutes } from './modules/inventario/inventario.routes.js';
 import type { VentasEventMap } from './modules/ventas/domain/eventos.js';
@@ -152,6 +154,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   );
 
   await app.register(inventarioRoutes, { repository: inventarioRepository });
+  await app.register(clientesRoutes, {
+    repository: new ClientesRepository(db),
+  });
   await app.register(ventasRoutes, {
     repository: new VentasRepository(db),
     unitOfWork,
