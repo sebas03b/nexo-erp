@@ -16,8 +16,10 @@ pnpm install
 cp .env.example .env
 pnpm db:up
 pnpm --filter @nexo/api db:migrate:up
+pnpm --filter api run seed
 pnpm dev
 ```
+
 
 - Web: <http://localhost:5173>
 - API: <http://localhost:3000>
