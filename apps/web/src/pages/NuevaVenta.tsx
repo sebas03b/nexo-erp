@@ -330,13 +330,6 @@ export function NuevaVenta(): JSX.Element {
                       >
                         +
                       </button>
-
-                      <span
-                        className="pos-stock-disponible"
-                        title={`Stock disponible: ${disponible}`}
-                      >
-                        {disponible} disp.
-                      </span>
                     </div>
 
                     <button
