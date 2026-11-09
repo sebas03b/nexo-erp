@@ -57,9 +57,8 @@ export function NuevaVenta(): JSX.Element {
     });
   }
 
-  function actualizarCantidad(productoId: string, valor: string): void {
-    const cantidad = Number.parseInt(valor, 10);
-    const disponible = stock[productoId] ?? 1;
+  function incrementarCantidad(productoId: string): void {
+    const disponible = stock[productoId] ?? 0;
 
     setLineas((actuales) =>
       actuales.map((linea) => {
@@ -67,12 +66,23 @@ export function NuevaVenta(): JSX.Element {
           return linea;
         }
 
-        const cantidadValida = Number.isNaN(cantidad) ? 1 : cantidad;
+        if (linea.cantidad >= disponible) {
+          return linea;
+        }
 
-        return {
-          ...linea,
-          cantidad: Math.min(Math.max(cantidadValida, 1), Math.max(disponible, 1)),
-        };
+        return { ...linea, cantidad: linea.cantidad + 1 };
+      }),
+    );
+  }
+
+  function decrementarCantidad(productoId: string): void {
+    setLineas((actuales) =>
+      actuales.map((linea) => {
+        if (linea.producto.id !== productoId) {
+          return linea;
+        }
+
+        return { ...linea, cantidad: Math.max(linea.cantidad - 1, 0) };
       }),
     );
   }
@@ -83,21 +93,62 @@ export function NuevaVenta(): JSX.Element {
     );
   }
 
+  const cantidadTotal = lineas.reduce(
+    (acumulado, linea) => acumulado + linea.cantidad,
+    0,
+  );
   const subtotal = redondearMoneda(
     lineas.reduce(
       (acumulado, linea) => acumulado + linea.producto.precio * linea.cantidad,
       0,
     ),
   );
-  const cantidadTotal = lineas.reduce(
-    (acumulado, linea) => acumulado + linea.cantidad,
-    0,
-  );
   const descuento = redondearMoneda(
     cantidadTotal > 10 ? subtotal * 0.1 : 0,
   );
   const impuesto = 0;
   const total = redondearMoneda(subtotal - descuento + impuesto);
+
+  async function dejarEnPendiente(): Promise<void> {
+    setError(null);
+
+    const documentoNormalizado = documentoCliente.trim();
+
+    if (documentoNormalizado === '') {
+      setError('Ingresa el documento del cliente.');
+      return;
+    }
+
+    if (lineas.length === 0) {
+      setError('Agrega al menos un producto al carrito.');
+      return;
+    }
+
+    setProcesando(true);
+
+    try {
+      const pedido = await enviarJson<Pedido>('/api/pedidos', 'POST', {
+        documentoCliente: documentoNormalizado,
+        items: lineas.map((linea) => ({
+          productoId: linea.producto.id,
+          cantidad: linea.cantidad,
+        })),
+      });
+
+      void navigate('/ventas', {
+        replace: true,
+        state: {
+          mensaje: `Pedido ${pedido.id} dejado en pendiente (Borrador).`,
+        },
+      });
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : 'No se pudo dejar el pedido en pendiente',
+      );
+    } finally {
+      setProcesando(false);
+    }
+  }
 
   async function procesarVenta(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -176,6 +227,12 @@ export function NuevaVenta(): JSX.Element {
         </div>
       </header>
 
+      {error ? (
+        <p role="alert" className="alert alert-error">
+          {error}
+        </p>
+      ) : null}
+
       <div className="pos-grid">
         <section className="app-card pos-panel" aria-labelledby="carrito-titulo">
           <div className="seccion-cabecera">
@@ -203,40 +260,97 @@ export function NuevaVenta(): JSX.Element {
             <p className="app-empty">Agrega productos desde el catálogo.</p>
           ) : (
             <ul className="pos-carrito-lista">
-              {lineas.map((linea) => (
-                <li key={linea.producto.id} className="pos-linea">
-                  <div className="pos-linea-info">
-                    <span className="pos-linea-nombre">{linea.producto.nombre}</span>
-                    <span className="pos-linea-precio">
-                      {formatearMoneda(linea.producto.precio)} c/u
-                    </span>
-                  </div>
+              {lineas.map((linea) => {
+                const disponible = stock[linea.producto.id] ?? 0;
 
-                  <input
-                    aria-label={`Cantidad de ${linea.producto.nombre}`}
-                    className="pos-cantidad"
-                    type="number"
-                    min="1"
-                    value={linea.cantidad}
-                    onChange={(event) =>
-                      actualizarCantidad(linea.producto.id, event.target.value)
-                    }
-                  />
+                return (
+                  <li key={linea.producto.id} className="pos-linea">
+                    <div className="pos-linea-info">
+                      <span className="pos-linea-nombre">
+                        {linea.producto.nombre}
+                      </span>
+                      <span className="pos-linea-precio">
+                        {formatearMoneda(linea.producto.precio)} c/u
+                      </span>
+                    </div>
 
-                  <span className="pos-linea-subtotal">
-                    {formatearMoneda(linea.producto.precio * linea.cantidad)}
-                  </span>
+                    <div className="pos-controles-cantidad">
+                      <button
+                        type="button"
+                        className="boton-icono boton-decrementar"
+                        aria-label={`Disminuir cantidad de ${linea.producto.nombre}`}
+                        title="Disminuir"
+                        disabled={linea.cantidad <= 1}
+                        onClick={() => decrementarCantidad(linea.producto.id)}
+                      >
+                        −
+                      </button>
 
-                  <button
-                    type="button"
-                    className="boton-eliminar"
-                    aria-label={`Eliminar ${linea.producto.nombre}`}
-                    onClick={() => eliminarProducto(linea.producto.id)}
-                  >
-                    Eliminar
-                  </button>
-                </li>
-              ))}
+                      <input
+                        aria-label={`Cantidad de ${linea.producto.nombre}`}
+                        className="pos-cantidad"
+                        type="number"
+                        min="0"
+                        value={linea.cantidad === 0 ? '' : linea.cantidad}
+                        onChange={(event) => {
+                          const valor = event.target.value;
+                          if (valor === '') {
+                            setLineas((actuales) =>
+                              actuales.map((l) =>
+                                l.producto.id === linea.producto.id
+                                  ? { ...l, cantidad: 0 }
+                                  : l,
+                              ),
+                            );
+                            return;
+                          }
+
+                          const numero = Number.parseInt(valor, 10);
+                          if (Number.isNaN(numero) || numero < 0) {
+                            return;
+                          }
+
+                          setLineas((actuales) =>
+                            actuales.map((l) =>
+                              l.producto.id === linea.producto.id
+                                ? { ...l, cantidad: Math.min(numero, Math.max(disponible, 0)) }
+                                : l,
+                            ),
+                          );
+                        }}
+                      />
+
+                      <button
+                        type="button"
+                        className="boton-icono boton-incrementar"
+                        aria-label={`Aumentar cantidad de ${linea.producto.nombre}`}
+                        title="Aumentar"
+                        disabled={linea.cantidad >= disponible}
+                        onClick={() => incrementarCantidad(linea.producto.id)}
+                      >
+                        +
+                      </button>
+
+                      <span
+                        className="pos-stock-disponible"
+                        title={`Stock disponible: ${disponible}`}
+                      >
+                        {disponible} disp.
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="boton-eliminar-icono"
+                      aria-label={`Eliminar ${linea.producto.nombre}`}
+                      title="Eliminar ítem"
+                      onClick={() => eliminarProducto(linea.producto.id)}
+                    >
+                      ✕
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
 
@@ -290,6 +404,15 @@ export function NuevaVenta(): JSX.Element {
             >
               {procesando ? 'Procesando…' : 'Procesar pago'}
             </button>
+
+            <button
+              type="button"
+              className="boton-secundario boton-compacto"
+              onClick={() => void dejarEnPendiente()}
+              disabled={procesando || lineas.length === 0}
+            >
+              {procesando ? 'Procesando…' : 'Dejar en pendiente'}
+            </button>
           </form>
         </section>
 
@@ -342,6 +465,7 @@ export function NuevaVenta(): JSX.Element {
                         <td>
                           <span
                             className={`stock-badge ${claseStock(disponible)}`}
+                          title={`Stock: ${disponible}`}
                           >
                             {disponible}
                           </span>

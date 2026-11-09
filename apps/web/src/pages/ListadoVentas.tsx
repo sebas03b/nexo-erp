@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
-import { eliminarRecurso, obtenerJson } from '../lib/api';
+import { eliminarRecurso, enviarJson, obtenerJson } from '../lib/api';
 import { formatearFechaHora, formatearMoneda } from '../lib/formato';
 import type { Pedido } from '../types';
 
@@ -103,6 +103,46 @@ export function ListadoVentas(): JSX.Element {
     setDetalle(null);
     setErrorDetalle(null);
     setCargandoDetalle(false);
+  }
+
+  async function confirmarPago(pedido: Pedido): Promise<void> {
+    const confirmado = window.confirm(
+      `¿Confirmar el pago del pedido ${pedido.id}?`,
+    );
+
+    if (!confirmado) {
+      return;
+    }
+
+    setErrorAccion(null);
+    setEliminandoId(pedido.id);
+
+    try {
+      await enviarJson<Pedido>(`/api/pedidos/${pedido.id}/pagar`, 'POST', {
+        metodoPago: 'efectivo',
+      });
+
+      setPedidos((actuales) =>
+        actuales.map((actual) =>
+          actual.id === pedido.id
+            ? { ...actual, estado: 'Pagado' }
+            : actual,
+        ),
+      );
+      setRecarga((valor) => valor + 1);
+
+      if (detalle?.id === pedido.id) {
+        cerrarDetalle();
+      }
+    } catch (caught) {
+      setErrorAccion(
+        caught instanceof Error
+          ? caught.message
+          : 'No se pudo confirmar el pago',
+      );
+    } finally {
+      setEliminandoId(null);
+    }
   }
 
   async function eliminarPedido(pedido: Pedido): Promise<void> {
@@ -255,6 +295,26 @@ export function ListadoVentas(): JSX.Element {
                         >
                           Detalles
                         </button>
+
+                        {(
+                          pedido.estado === 'Borrador' ||
+                          pedido.estado === 'Emitido' ||
+                          pedido.estado === 'Pendiente'
+                        ) && (
+                          <button
+                            type="button"
+                            className="boton-secundario boton-compacto boton-confirmar-pago"
+                            aria-label={`Confirmar pago del pedido ${pedido.id}`}
+                            title="Confirmar pago"
+                            disabled={eliminandoId === pedido.id}
+                            onClick={() => {
+                              void confirmarPago(pedido);
+                            }}
+                          >
+                            Confirmar pago
+                          </button>
+                        )}
+
                         <button
                           type="button"
                           className="boton-eliminar-icono boton-eliminar-pedido"

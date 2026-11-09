@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "db:migrate:up": "tsx src/shared/db/migrate.ts up",
-    "db:migrate:down": "tsx src/shared/db/migrate.ts down"
+    "db:migrate:down": "tsx src/shared/db/migrate.ts down",
+    "seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.4.1",

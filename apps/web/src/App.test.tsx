@@ -354,15 +354,12 @@ describe('App', () => {
     const cantidad = within(carrito).getByLabelText('Cantidad de Café de prueba');
     expect(cantidad).toHaveValue(1);
 
-    const subtotalLinea = carrito.querySelector('.pos-linea-subtotal');
     const totalVenta = carrito.querySelector('.pos-total dd');
-    expect(subtotalLinea).toHaveTextContent('100');
     expect(totalVenta).toHaveTextContent('100');
 
     fireEvent.change(cantidad, { target: { value: '2' } });
 
     expect(cantidad).toHaveValue(2);
-    expect(subtotalLinea).toHaveTextContent('200');
     expect(totalVenta).toHaveTextContent('200');
 
     fireEvent.click(
@@ -447,8 +444,8 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Procesar pago' }));
 
     expect(
-      await screen.findByText('Ingresa el documento del cliente.'),
-    ).toBeInTheDocument();
+      await screen.findAllByText('Ingresa el documento del cliente.'),
+    ).toHaveLength(2);
     expect(fetchMock).not.toHaveBeenCalledWith(
       '/api/pedidos',
       expect.objectContaining({ method: 'POST' }),

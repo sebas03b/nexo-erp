@@ -819,6 +819,84 @@ button:disabled {
   background-color: #b91c1c;
 }
 
+.pos-controles-cantidad {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.boton-confirmar-pago {
+  background-color: #16a34a;
+  color: #ffffff;
+}
+
+.boton-confirmar-pago:hover:not(:disabled) {
+  background-color: #15803d;
+}
+
+.boton-decrementar,
+.boton-incrementar {
+  width: 2rem;
+  height: 2rem;
+  min-width: 2rem;
+  padding: 0;
+  border: 1px solid #334155;
+  border-radius: 0.45rem;
+  background-color: #0f172a;
+  color: #e2e8f0;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.boton-decrementar:hover:not(:disabled),
+.boton-incrementar:hover:not(:disabled) {
+  border-color: #38bdf8;
+  color: #7dd3fc;
+  background-color: #1e293b;
+}
+
+.boton-decrementar:disabled,
+.boton-incrementar:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: #334155;
+  color: #64748b;
+}
+
+.pos-cantidad {
+  width: 3.5rem;
+  min-width: 0;
+  padding: 0.4rem 0.5rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.pos-stock-disponible {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-left: 0.35rem;
+  white-space: nowrap;
+}
+
+.boton-eliminar-pedido {
+  align-self: stretch;
+  width: 1.75rem;
+  height: auto;
+  min-height: 2rem;
+  padding: 0 0.35rem;
+  background-color: #dc2626;
+  color: #ffffff;
+}
+
+.boton-eliminar-pedido:hover:not(:disabled) {
+  background-color: #b91c1c;
+}
+
 .producto-form {
   display: grid;
   gap: 0.85rem;
