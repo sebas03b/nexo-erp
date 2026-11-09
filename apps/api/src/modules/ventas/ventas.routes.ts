@@ -6,6 +6,8 @@ import type { VentasEventMap } from './domain/eventos.js';
 import type { VentasRepository } from './ventas.repository.js';
 import type { CatalogoProductos, VerificadorClientes } from './domain/ports.js';
 import { VentasService, type EstrategiasVentas } from './ventas.service.js';
+import { PosCheckoutFacade } from './pos/pos-checkout.facade.js';
+import type { CheckoutInput } from './pos/pos-checkout.facade.js';
 
 const pedidoItemSchema = z.object({
   productoId: z.string().uuid(),
@@ -32,17 +34,25 @@ const facturaParamsSchema = z.object({
   id: z.string().uuid(),
 });
 
+const checkoutSchema = z.object({
+  documentoCliente: z.string().trim().min(1),
+  items: z.array(pedidoItemSchema).min(1),
+  metodoPago: z.enum(['efectivo', 'pasarela']).optional(),
+  montoRecibido: z.coerce.number().nonnegative().optional(),
+});
+
 export interface VentasRoutesOptions {
   repository: VentasRepository;
   unitOfWork: UnitOfWork<VentasEventMap>;
   catalogo: CatalogoProductos;
   clientes: VerificadorClientes;
   estrategias: EstrategiasVentas;
+  facade: PosCheckoutFacade;
 }
 
 export const ventasRoutes: FastifyPluginCallback<VentasRoutesOptions> = (
   app,
-  { repository, unitOfWork, catalogo, clientes, estrategias },
+  { repository, unitOfWork, catalogo, clientes, estrategias, facade },
   done,
 ) => {
   const service = new VentasService(
@@ -52,6 +62,8 @@ export const ventasRoutes: FastifyPluginCallback<VentasRoutesOptions> = (
     clientes,
     estrategias,
   );
+
+  const checkoutFacade = facade;
 
   app.get('/api/pedidos', async () => service.listarPedidos());
 
@@ -99,6 +111,17 @@ export const ventasRoutes: FastifyPluginCallback<VentasRoutesOptions> = (
     const factura = await service.crearFactura(id);
 
     return reply.code(201).send(factura);
+  });
+
+  app.post<{ Body: CheckoutInput }>('/api/ventas/checkout', async (request, reply) => {
+    const data = checkoutSchema.parse(request.body);
+    const resultado = await checkoutFacade.checkout(data);
+
+    return reply.code(201).send({
+      pedido: resultado.pedido,
+      factura: resultado.factura,
+      pago: resultado.pago,
+    });
   });
 
   app.get('/api/facturas', async () => service.listarFacturas());

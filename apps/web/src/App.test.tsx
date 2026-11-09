@@ -177,6 +177,34 @@ function instalarFetch(
         );
       }
 
+      if (
+        url === '/api/ventas/checkout' &&
+        init?.method === 'POST'
+      ) {
+        const body = init?.body ? JSON.parse(init.body as string) : null;
+        return Promise.resolve(
+          respuestaJson({
+            pedido: {
+              ...pedidoPagado,
+              id: PEDIDO_ID,
+              estado: 'Pagado',
+              total: 100,
+              documentoCliente: body?.documentoCliente,
+            },
+            factura: {
+              id: 'factura-1',
+              numero: 'FAC-000001',
+              estado: 'Emitida',
+            },
+            pago: {
+              metodo: body?.metodoPago ?? 'efectivo',
+              monto: 100,
+              referencia: 'PAGO-1',
+            },
+          }),
+        );
+      }
+
       return Promise.resolve(respuestaJson({ error: { message: 'No encontrado' } }, 404));
     },
   );
@@ -397,23 +425,14 @@ describe('App', () => {
       new RegExp(`Venta ${PEDIDO_ID} pagada con Pasarela por`),
     );
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/pedidos', {
+    expect(fetchMock).toHaveBeenCalledWith('/api/ventas/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         documentoCliente: 'CC-123456',
         items: [{ productoId: PRODUCTO_ID, cantidad: 2 }],
+        metodoPago: 'pasarela',
       }),
-    });
-    expect(fetchMock).toHaveBeenCalledWith(`/api/pedidos/${PEDIDO_ID}/emitir`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    });
-    expect(fetchMock).toHaveBeenCalledWith(`/api/pedidos/${PEDIDO_ID}/pagar`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ metodoPago: 'pasarela' }),
     });
   });
 

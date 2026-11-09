@@ -1,5 +1,6 @@
 import type { Kysely } from 'kysely';
 
+import { DomainError } from '../../shared/errors/domain-error.js';
 import {
   traducirErrorBd,
   type TraduccionesErrorBd,
@@ -192,6 +193,23 @@ export class InventarioRepository {
       .executeTakeFirst();
 
     return Number(result.numDeletedRows) > 0;
+  }
+
+  async decrementarStock(productoId: string, cantidad: number): Promise<void> {
+    const stock = await this.obtenerStock(productoId);
+
+    if (!stock || stock.cantidad < cantidad) {
+      throw new DomainError('Stock insuficiente', {
+        code: 'STOCK_INSUFICIENTE',
+        statusCode: 409,
+      });
+    }
+
+    await this.#db
+      .updateTable('stock')
+      .set({ cantidad: stock.cantidad - cantidad })
+      .where('producto_id', '=', productoId)
+      .execute();
   }
 
   async obtenerPrecio(productoId: string): Promise<number | null> {

@@ -118,28 +118,25 @@ export function NuevaVenta(): JSX.Element {
     setProcesando(true);
 
     try {
-      const pedido = await enviarJson<Pedido>('/api/pedidos', 'POST', {
+      const resultado = await enviarJson<{
+        pedido: Pedido;
+        factura: { id: string; numero: string; estado: string };
+        pago: { metodo: string; monto: number; referencia: string };
+      }>('/api/ventas/checkout', 'POST', {
         documentoCliente: documentoNormalizado,
         items: lineas.map((linea) => ({
           productoId: linea.producto.id,
           cantidad: linea.cantidad,
         })),
+        metodoPago,
       });
-
-      await enviarJson<Pedido>(`/api/pedidos/${pedido.id}/emitir`, 'POST', {});
-
-      const pagado = await enviarJson<Pedido>(
-        `/api/pedidos/${pedido.id}/pagar`,
-        'POST',
-        { metodoPago },
-      );
 
       void navigate('/ventas', {
         replace: true,
         state: {
-          mensaje: `Venta ${pagado.id} pagada con ${etiquetaMetodoPago(
-            metodoPago,
-          )} por ${formatearMoneda(pagado.total)}.`,
+          mensaje: `Venta ${resultado.pedido.id} pagada con ${etiquetaMetodoPago(
+            resultado.pago.metodo as MetodoPago,
+          )} por ${formatearMoneda(resultado.pedido.total)}. Factura ${resultado.factura.numero}.`,
         },
       });
     } catch (caught) {

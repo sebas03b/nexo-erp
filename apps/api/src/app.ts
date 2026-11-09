@@ -12,6 +12,10 @@ import { PagoPasarela } from './modules/ventas/domain/payments/pago-pasarela.str
 import type { CatalogoProductos, VerificadorClientes } from './modules/ventas/domain/ports.js';
 import { DescuentoPorVolumen } from './modules/ventas/domain/pricing/descuento-volumen.strategy.js';
 import { ImpuestoExento } from './modules/ventas/domain/pricing/impuesto-exento.strategy.js';
+import { CadenaValidacion } from './modules/ventas/domain/validation/cadena-validacion.js';
+import { ValidarClienteValido } from './modules/ventas/domain/validation/cadena-validacion.js';
+import { ValidarStockSuficiente } from './modules/ventas/domain/validation/cadena-validacion.js';
+import { PosCheckoutFacade } from './modules/ventas/pos/pos-checkout.facade.js';
 import { VentasRepository } from './modules/ventas/ventas.repository.js';
 import { ventasRoutes } from './modules/ventas/ventas.routes.js';
 import type { EstrategiasVentas } from './modules/ventas/ventas.service.js';
@@ -125,6 +129,28 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
   };
 
+  const cadenaValidacion = new CadenaValidacion();
+  cadenaValidacion.agregar(new ValidarClienteValido());
+  cadenaValidacion.agregar(
+    new ValidarStockSuficiente(),
+  );
+
+  const posCheckoutFacade = new PosCheckoutFacade(
+    cadenaValidacion,
+    estrategiasVentas,
+    catalogo,
+    clientes,
+    new VentasRepository(db),
+    unitOfWork,
+    async (productoId: string, cantidad: number) => {
+      const stock = await inventarioRepository.obtenerStock(productoId);
+      return stock !== undefined && stock.cantidad >= cantidad;
+    },
+    async (productoId: string, cantidad: number) => {
+      await inventarioRepository.decrementarStock(productoId, cantidad);
+    },
+  );
+
   await app.register(inventarioRoutes, { repository: inventarioRepository });
   await app.register(ventasRoutes, {
     repository: new VentasRepository(db),
@@ -132,6 +158,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     catalogo,
     clientes,
     estrategias: estrategiasVentas,
+    facade: posCheckoutFacade,
   });
 
   if (ownsDb) {
