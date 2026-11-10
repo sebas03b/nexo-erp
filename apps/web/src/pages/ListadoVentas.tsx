@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { eliminarRecurso, enviarJson, obtenerJson } from '../lib/api';
 import { formatearFechaHora, formatearMoneda } from '../lib/formato';
+import { FiDelete } from 'react-icons/fi';
 import type { Pedido } from '../types';
 
 interface EstadoNavegacion {
@@ -315,7 +316,7 @@ export function ListadoVentas(): JSX.Element {
                             void eliminarPedido(pedido);
                           }}
                         >
-                          {eliminandoId === pedido.id ? '…' : '✕'}
+                          {eliminandoId === pedido.id ? '…' : <FiDelete size={16} />}
                         </button>
                       </div>
                     </td>

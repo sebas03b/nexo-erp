@@ -4,6 +4,7 @@ import { useCatalogo } from '../hooks/useCatalogo';
 import { eliminarRecurso, enviarJson } from '../lib/api';
 import { formatearMoneda } from '../lib/formato';
 import { claseStock } from '../lib/stock';
+import { FiDelete, FiEdit } from 'react-icons/fi';
 import type { Producto } from '../types';
 
 export function Productos(): JSX.Element {
@@ -259,7 +260,7 @@ export function Productos(): JSX.Element {
                             title="Editar producto"
                             onClick={() => abrirEdicion(producto)}
                           >
-                            ✏️
+                            <FiEdit size={16} />
                           </button>
                           <button
                             type="button"
@@ -271,7 +272,7 @@ export function Productos(): JSX.Element {
                               void eliminarProducto(producto);
                             }}
                           >
-                            {eliminandoId === producto.id ? '…' : '✕'}
+                            {eliminandoId === producto.id ? '…' : <FiDelete size={16} />}
                           </button>
                         </div>
                       </td>

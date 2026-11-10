@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type JSX } from 'react';
 
 import { obtenerJson, enviarJson, eliminarRecurso } from '../lib/api';
+import { FiDelete } from 'react-icons/fi';
 import type { CanalPreferido, Cliente } from '../types';
 
 interface ClienteApi {
@@ -247,7 +248,7 @@ export function Clientes(): JSX.Element {
                             void eliminarCliente(cliente);
                           }}
                         >
-                          {eliminandoId === cliente.id ? '…' : '✕'}
+                          {eliminandoId === cliente.id ? '…' : <FiDelete size={16} />}
                         </button>
                       </div>
                     </td>

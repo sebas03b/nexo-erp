@@ -5,6 +5,7 @@ import { useCatalogo } from '../hooks/useCatalogo';
 import { obtenerJson, enviarJson } from '../lib/api';
 import { formatearMoneda, redondearMoneda } from '../lib/formato';
 import { claseStock } from '../lib/stock';
+import { FiDelete } from 'react-icons/fi';
 import type { Cliente, Pedido, Producto } from '../types';
 
 type MetodoPago = 'efectivo' | 'pasarela';
@@ -434,7 +435,7 @@ export function NuevaVenta(): JSX.Element {
                       title="Eliminar ítem"
                       onClick={() => eliminarProducto(linea.producto.id)}
                     >
-                      ✕
+                      <FiDelete size={16} />
                     </button>
                   </li>
                 );

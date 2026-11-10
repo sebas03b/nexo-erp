@@ -349,7 +349,7 @@ button {
 }
 
 button:disabled {
-  opacity: 0.6;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
@@ -893,12 +893,13 @@ button:disabled {
 }
 
 .boton-confirmar-pago {
-  background-color: #16a34a;
-  color: #ffffff;
+    border: 1px solid #334155;
+    background-color: transparent;
+    color: inherit;
 }
 
 .boton-confirmar-pago:hover:not(:disabled) {
-  background-color: #15803d;
+  background-color: #14532d;
 }
 
 .boton-decrementar,
@@ -1037,7 +1038,7 @@ button:disabled {
 
 .boton-agregar {
   padding: 0.45rem 0.7rem;
-  background-color: #2563eb;
+  background-color: #195faf;
   font-size: 0.85rem;
 }
 
