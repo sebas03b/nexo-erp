@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { eliminarRecurso, enviarJson, obtenerJson } from '../lib/api';
 import { formatearFechaHora, formatearMoneda } from '../lib/formato';
@@ -182,23 +182,6 @@ export function ListadoVentas(): JSX.Element {
     <div className="pagina">
       <header className="pagina-header">
         <div>
-          <Link
-            to="/ventas"
-            className="pagina-volver"
-            aria-label="Volver a Ventas"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path
-                d="M19 12H5M11 6l-6 6 6 6"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1.8"
-              />
-            </svg>
-            Ventas
-          </Link>
           <h2>Historial de ventas</h2>
           <p className="app-description">
             Consulta los pedidos registrados y abre una nueva venta en el POS.

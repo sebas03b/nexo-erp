@@ -117,6 +117,19 @@ body {
   font-size: 0.75rem;
 }
 
+.sidebar-logo {
+  width: 9rem;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+.sidebar-logo-contenedor {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
 .app-contenido {
   width: 100%;
   min-width: 0;

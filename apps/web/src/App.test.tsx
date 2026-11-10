@@ -279,7 +279,7 @@ describe('App', () => {
   it('muestra la identidad de Nexo-ERP', () => {
     render(<App />);
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Nexo-ERP' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Nexo-ERP' })).toBeInTheDocument();
   });
 
   it('muestra el historial de ventas con el estado y total de cada pedido', async () => {
@@ -297,10 +297,6 @@ describe('App', () => {
     expect(within(tabla).queryByText(CLIENTE_DOCUMENTO)).not.toBeInTheDocument();
     expect(screen.getByText('Pagado')).toBeInTheDocument();
     expect(within(tabla).getByText(/200/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Volver a Ventas' })).toHaveAttribute(
-      'href',
-      '/ventas',
-    );
     const historial = screen.getByRole('region', { name: 'Pedidos' });
     expect(
       within(historial).getByRole('button', { name: 'Nueva Venta' }),

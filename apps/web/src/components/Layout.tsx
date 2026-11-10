@@ -1,6 +1,8 @@
 import type { JSX, ReactNode } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 
+import logoSidebar from '../assets/logonexo1.png';
+
 interface EnlaceSidebar {
   to: string;
   etiqueta: string;
@@ -77,9 +79,8 @@ export function Layout(): JSX.Element {
   return (
     <div className="app-layout">
       <aside className="sidebar">
-        <NavLink to="/ventas" className="sidebar-marca">
-          <span className="app-eyebrow">Nexo ERP</span>
-          <h1>Nexo-ERP</h1>
+        <NavLink to="/ventas" className="sidebar-marca sidebar-logo-contenedor">
+          <img src={logoSidebar} alt="Nexo-ERP" className="sidebar-logo" />
         </NavLink>
 
         <nav className="sidebar-nav" aria-label="Navegación principal">
@@ -97,8 +98,6 @@ export function Layout(): JSX.Element {
             </NavLink>
           ))}
         </nav>
-
-        <p className="sidebar-pie">Fase 3 · Patrones Strategy</p>
       </aside>
 
       <main className="app-contenido">
