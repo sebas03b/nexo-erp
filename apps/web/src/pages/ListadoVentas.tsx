@@ -118,6 +118,13 @@ export function ListadoVentas(): JSX.Element {
     setEliminandoId(pedido.id);
 
     try {
+      // Borrador → Emitido → Pagado. Si está en Borrador, primero emitir.
+      if (pedido.estado === 'Borrador') {
+        await enviarJson<Pedido>(`/api/pedidos/${pedido.id}/emitir`, 'POST', {
+          metodoPago: 'efectivo',
+        });
+      }
+
       await enviarJson<Pedido>(`/api/pedidos/${pedido.id}/pagar`, 'POST', {
         metodoPago: 'efectivo',
       });
