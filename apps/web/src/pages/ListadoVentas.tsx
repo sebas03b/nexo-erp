@@ -246,7 +246,7 @@ export function ListadoVentas(): JSX.Element {
                   <th scope="col">Cliente</th>
                   <th scope="col">Estado</th>
                   <th scope="col">Total</th>
-                  <th scope="col">Acciones</th>
+                  <th scope="col"></th>
                 </tr>
               </thead>
               <tbody>

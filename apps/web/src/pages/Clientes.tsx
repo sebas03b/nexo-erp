@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type JSX } from 'react';
 
-import { obtenerJson, enviarJson } from '../lib/api';
+import { obtenerJson, enviarJson, eliminarRecurso } from '../lib/api';
 import type { CanalPreferido, Cliente } from '../types';
 
 interface ClienteApi {
@@ -38,6 +38,7 @@ export function Clientes(): JSX.Element {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [recarga, setRecarga] = useState(0);
+  const [eliminandoId, setEliminandoId] = useState<string | null>(null);
 
   const [abierto, setAbierto] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -101,6 +102,35 @@ export function Clientes(): JSX.Element {
     setAbierto(false);
   }
 
+  async function eliminarCliente(cliente: Cliente): Promise<void> {
+    const confirmado = window.confirm(
+      `¿Eliminar el cliente "${cliente.nombre}"? Esta acción no se puede deshacer.`,
+    );
+
+    if (!confirmado) {
+      return;
+    }
+
+    setErrorAccion(null);
+    setEliminandoId(cliente.id);
+
+    try {
+      await eliminarRecurso(`/api/clientes/${cliente.id}`);
+      setClientes((actuales) =>
+        actuales.filter((actual) => actual.id !== cliente.id),
+      );
+      setRecarga((valor) => valor + 1);
+    } catch (caught) {
+      setErrorAccion(
+        caught instanceof Error
+          ? caught.message
+          : 'No se pudo eliminar el cliente',
+      );
+    } finally {
+      setEliminandoId(null);
+    }
+  }
+
   async function crearCliente(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
 
@@ -144,23 +174,13 @@ export function Clientes(): JSX.Element {
 
   return (
     <div className="pagina">
-      <header className="pagina-header pagina-header-con-accion">
+      <header className="pagina-header">
         <div>
-          <p className="app-eyebrow">Relaciones</p>
           <h2>Clientes</h2>
           <p className="app-description">
             Administración de clientes y su información de contacto.
           </p>
         </div>
-
-        <button
-          type="button"
-          className="boton-primario"
-          onClick={abrirNuevoCliente}
-          disabled={cargando}
-        >
-          Nuevo Cliente
-        </button>
       </header>
 
       {error ? (
@@ -172,9 +192,19 @@ export function Clientes(): JSX.Element {
       ) : null}
 
       <section className="app-card" aria-labelledby="clientes-titulo">
-        <h3 id="clientes-titulo" className="seccion-titulo">
-          Clientes registrados
-        </h3>
+        <div className="seccion-cabecera flex justify-between items-center">
+          <h3 id="clientes-titulo" className="seccion-titulo">
+            Clientes registrados
+          </h3>
+          <button
+            type="button"
+            className="boton-primario boton-compacto"
+            onClick={abrirNuevoCliente}
+            disabled={cargando}
+          >
+            Nuevo Cliente
+          </button>
+        </div>
 
         {cargando ? (
           <p className="app-empty">Cargando clientes…</p>
@@ -190,6 +220,7 @@ export function Clientes(): JSX.Element {
                   <th scope="col">Correo</th>
                   <th scope="col">Teléfono</th>
                   <th scope="col">Canal preferido</th>
+                  <th scope="col"></th>
                 </tr>
               </thead>
               <tbody>
@@ -203,6 +234,22 @@ export function Clientes(): JSX.Element {
                       <span className={`canal canal-${cliente.canalPreferido}`}>
                         {ETIQUETAS_CANAL[cliente.canalPreferido]}
                       </span>
+                    </td>
+                    <td>
+                      <div className="acciones-tabla">
+                        <button
+                          type="button"
+                          className="boton-eliminar-icono"
+                          aria-label={`Eliminar ${cliente.nombre}`}
+                          title="Eliminar cliente"
+                          disabled={eliminandoId === cliente.id}
+                          onClick={() => {
+                            void eliminarCliente(cliente);
+                          }}
+                        >
+                          {eliminandoId === cliente.id ? '…' : '✕'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

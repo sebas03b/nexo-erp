@@ -73,6 +73,38 @@ const enlaces: EnlaceSidebar[] = [
       </svg>
     ),
   },
+  {
+    to: '#',
+    etiqueta: 'Citas',
+    icono: (
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <rect x="3" y="4" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" rx="2" ry="2" />
+        <path d="M3 10h18M8 3v1M16 3v1M3 21h18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    to: '#',
+    etiqueta: 'Contabilidad',
+    icono: (
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <rect x="3" y="5" width="18" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" rx="2" ry="2" />
+        <path d="M7 8h2M7 12h2M7 16h2M13 8h2M13 12h2M13 16h2" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M6 16h12M6 12h12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    to: '#',
+    etiqueta: 'Gestión de personal',
+    icono: (
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" strokeWidth="1.7" />
+        <path d="M11 21v-2a4 4 0 0 0-4-4h-2a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
 ];
 
 export function Layout(): JSX.Element {
@@ -89,9 +121,13 @@ export function Layout(): JSX.Element {
             <NavLink
               key={enlace.to}
               to={enlace.to}
-              className={({ isActive }) =>
-                isActive ? 'sidebar-enlace sidebar-enlace-activo' : 'sidebar-enlace'
-              }
+              className={({ isActive }) => {
+                const esFicticio = enlace.to === '#';
+                const estaActivo = !esFicticio && isActive;
+                return estaActivo
+                  ? 'sidebar-enlace sidebar-enlace-activo'
+                  : 'sidebar-enlace';
+              }}
             >
               <span className="sidebar-icono">{enlace.icono}</span>
               <span>{enlace.etiqueta}</span>

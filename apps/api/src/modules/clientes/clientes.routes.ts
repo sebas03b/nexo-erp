@@ -39,5 +39,12 @@ export const clientesRoutes: FastifyPluginCallback<ClientesRoutesOptions> = (
     },
   );
 
+  app.delete<{ Params: { id: string } }>('/api/clientes/:id', async (request, reply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    await service.eliminarCliente(id);
+
+    return reply.code(204).send();
+  });
+
   done();
 };

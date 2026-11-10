@@ -15,6 +15,12 @@ export function Productos(): JSX.Element {
   const [guardando, setGuardando] = useState(false);
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const [errorAccion, setErrorAccion] = useState<string | null>(null);
+  const [creandoProducto, setCreandoProducto] = useState<boolean>(false);
+  const [modalNuevoProducto, setModalNuevoProducto] = useState<boolean>(false);
+  const [nuevoNombre, setNuevoNombre] = useState('');
+  const [nuevoPrecio, setNuevoPrecio] = useState('');
+  const [nuevoTipo, setNuevoTipo] = useState('producto');
+  const [nuevoSku, setNuevoSku] = useState('');
 
   function abrirEdicion(producto: Producto): void {
     setProductoEditando(producto);
@@ -112,25 +118,62 @@ export function Productos(): JSX.Element {
     }
   }
 
+  async function crearProductoNuevo(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+
+    const skuNormalizado = nuevoSku.trim();
+    const nombreNormalizado = nuevoNombre.trim();
+    const precioNumero = Number(nuevoPrecio);
+
+    if (skuNormalizado === '') {
+      setErrorAccion('Ingresa el SKU del producto.');
+      return;
+    }
+
+    if (nombreNormalizado === '') {
+      setErrorAccion('Ingresa el nombre del producto.');
+      return;
+    }
+
+    if (!Number.isFinite(precioNumero) || precioNumero < 0) {
+      setErrorAccion('El precio debe ser un número mayor o igual a 0.');
+      return;
+    }
+
+    setCreandoProducto(true);
+    setErrorAccion(null);
+
+    try {
+      await enviarJson<Producto>('/api/productos', 'POST', {
+        sku: skuNormalizado,
+        nombre: nombreNormalizado,
+        precio: precioNumero,
+        tipo: nuevoTipo,
+      });
+
+      setModalNuevoProducto(false);
+      recargar();
+    } catch (caught) {
+      setErrorAccion(
+        caught instanceof Error
+          ? caught.message
+          : 'No se pudo crear el producto',
+      );
+    } finally {
+      setCreandoProducto(false);
+    }
+  }
+
   return (
     <div className="pagina">
       <header className="pagina-header pagina-header-con-accion">
         <div>
-          <p className="app-eyebrow">Inventario</p>
           <h2>Productos y Stock</h2>
           <p className="app-description">
             Catálogo disponible y existencias registradas para cada producto.
           </p>
         </div>
 
-        <button
-          type="button"
-          className="boton-secundario"
-          onClick={recargar}
-          disabled={cargando}
-        >
-          {cargando ? 'Actualizando…' : 'Actualizar'}
-        </button>
       </header>
 
       {error ? (
@@ -146,9 +189,34 @@ export function Productos(): JSX.Element {
       ) : null}
 
       <section className="app-card" aria-labelledby="inventario-titulo">
-        <h3 id="inventario-titulo" className="seccion-titulo">
-          Inventario
-        </h3>
+        <div className="seccion-cabecera">
+          <h3 id="inventario-titulo" className="seccion-titulo">
+            Inventario
+          </h3>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="boton-primario boton-compacto"
+              onClick={() => {
+                setNuevoNombre('');
+                setNuevoPrecio('');
+                setNuevoTipo('producto');
+                setNuevoSku('');
+                setModalNuevoProducto(true);
+              }}
+            >
+              Nuevo Producto
+            </button>
+            <button
+              type="button"
+              className="boton-secundario boton-compacto"
+              onClick={recargar}
+              disabled={cargando}
+            >
+              {cargando ? 'Actualizando…' : 'Actualizar'}
+            </button>
+          </div>
+        </div>
 
         {cargando ? (
           <p className="app-empty">Cargando productos…</p>
@@ -164,7 +232,7 @@ export function Productos(): JSX.Element {
                   <th scope="col">Tipo</th>
                   <th scope="col">Precio</th>
                   <th scope="col">Stock</th>
-                  <th scope="col">Acciones</th>
+                  <th scope="col"></th>
                 </tr>
               </thead>
               <tbody>
@@ -285,6 +353,92 @@ export function Productos(): JSX.Element {
                 </button>
                 <button type="submit" disabled={guardando}>
                   {guardando ? 'Guardando…' : 'Guardar cambios'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
+      {modalNuevoProducto ? (
+        <div className="modal-backdrop">
+          <section
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="nuevo-producto-titulo"
+          >
+            <h3 id="nuevo-producto-titulo" className="seccion-titulo">
+              Nuevo Producto
+            </h3>
+
+            <form
+              className="producto-form"
+              onSubmit={(event) => {
+                void crearProductoNuevo(event);
+              }}
+            >
+              <div className="producto-form-campo">
+                <label htmlFor="nuevo-sku">SKU</label>
+                <input
+                  id="nuevo-sku"
+                  type="text"
+                  value={nuevoSku}
+                  onChange={(event) => setNuevoSku(event.target.value)}
+                />
+              </div>
+
+              <div className="producto-form-campo">
+                <label htmlFor="nuevo-nombre">Nombre</label>
+                <input
+                  id="nuevo-nombre"
+                  type="text"
+                  value={nuevoNombre}
+                  onChange={(event) => setNuevoNombre(event.target.value)}
+                />
+              </div>
+
+              <div className="producto-form-campo">
+                <label htmlFor="nuevo-precio">Precio</label>
+                <input
+                  id="nuevo-precio"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={nuevoPrecio}
+                  onChange={(event) => setNuevoPrecio(event.target.value)}
+                />
+              </div>
+
+              <div className="producto-form-campo">
+                <label htmlFor="nuevo-tipo">Tipo</label>
+                <select
+                  id="nuevo-tipo"
+                  value={nuevoTipo}
+                  onChange={(event) => setNuevoTipo(event.target.value)}
+                >
+                  <option value="producto">Producto</option>
+                  <option value="servicio">Servicio</option>
+                </select>
+              </div>
+
+              {errorAccion ? (
+                <p role="alert" className="alert alert-error">
+                  {errorAccion}
+                </p>
+              ) : null}
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="boton-secundario"
+                  onClick={() => setModalNuevoProducto(false)}
+                  disabled={creandoProducto}
+                >
+                  Cancelar
+                </button>
+                <button type="submit" disabled={creandoProducto}>
+                  {creandoProducto ? 'Creando…' : 'Crear producto'}
                 </button>
               </div>
             </form>

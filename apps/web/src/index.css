@@ -135,7 +135,7 @@ body {
   min-width: 0;
   max-width: 76rem;
   margin: 0 auto;
-  padding: 3rem 2.5rem;
+  padding: 4rem 2.5rem;
 }
 
 .pagina {
@@ -207,7 +207,7 @@ h2 {
 }
 
 .app-description {
-  margin: 0;
+  margin: 0.35rem 0 0 0;
   color: #94a3b8;
 }
 
@@ -259,6 +259,17 @@ h2 {
   white-space: normal;
 }
 
+.productos-tabla th:nth-child(3),
+.productos-tabla td:nth-child(3),
+.productos-tabla th:nth-child(4),
+.productos-tabla td:nth-child(4),
+.productos-tabla th:nth-child(5),
+.productos-tabla td:nth-child(5),
+.productos-tabla th:nth-child(6),
+.productos-tabla td:nth-child(6) {
+  text-align: center;
+}
+
 .productos-tabla th {
   color: #94a3b8;
   font-size: 0.8rem;
@@ -269,6 +280,13 @@ h2 {
 .ventas-tabla th,
 .ventas-tabla td {
   text-align: center;
+}
+
+.ventas-tabla th:first-child,
+.ventas-tabla td:first-child,
+.ventas-tabla th:nth-child(2),
+.ventas-tabla td:nth-child(2) {
+  text-align: left;
 }
 
 .acciones-tabla {
@@ -654,6 +672,26 @@ button:disabled {
 .boton-compacto {
   padding: 0.45rem 0.8rem;
   font-size: 0.85rem;
+}
+
+.flex {
+  display: flex;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.gap-2 {
+  gap: 0.5rem;
+}
+
+.gap-4 {
+  gap: 1rem;
 }
 
 .seccion-cabecera {
@@ -1079,7 +1117,7 @@ select {
   }
 
   .app-contenido {
-    padding: 1.75rem 1.25rem;
+    padding: 1.75rem 1.5rem;
   }
 }
 

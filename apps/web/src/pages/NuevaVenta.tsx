@@ -191,7 +191,7 @@ export function NuevaVenta(): JSX.Element {
     setProcesando(true);
 
     try {
-      const pedido = await enviarJson<Pedido>('/api/pedidos', 'POST', {
+      await enviarJson<Pedido>('/api/pedidos', 'POST', {
         documentoCliente: documentoNormalizado,
         items: lineas.map((linea) => ({
           productoId: linea.producto.id,
@@ -202,7 +202,7 @@ export function NuevaVenta(): JSX.Element {
       void navigate('/ventas', {
         replace: true,
         state: {
-          mensaje: `Pedido ${pedido.id} dejado en pendiente (Borrador).`,
+          mensaje: 'Pedido dejado en pendiente (Borrador) exitosamente.',
         },
       });
     } catch (caught) {

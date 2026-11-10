@@ -23,6 +23,16 @@ export class ClientesService {
     return cliente;
   }
 
+  async eliminarCliente(id: string): Promise<void> {
+    await this.obtenerCliente(id);
+
+    const eliminado = await this.#repository.eliminarCliente(id);
+
+    if (!eliminado) {
+      throw new RecursoNoEncontrado('CLIENTE_NO_ENCONTRADO', 'Cliente no encontrado');
+    }
+  }
+
   async crearCliente(data: CrearClienteData): Promise<Cliente> {
     const existente = await this.#repository.obtenerClientePorDocumento(
       data.documento.trim(),

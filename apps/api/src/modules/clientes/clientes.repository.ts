@@ -15,6 +15,15 @@ const TRADUCCIONES_CLIENTE: TraduccionesErrorBd = {
   },
 };
 
+const TRADUCCIONES_ELIMINACION_CLIENTE: TraduccionesErrorBd = {
+  '23503': {
+    code: 'CLIENTE_EN_USO',
+    message:
+      'El cliente tiene pedidos asociados y no se puede eliminar',
+    statusCode: 409,
+  },
+};
+
 interface ClienteRow {
   id: string;
   nombre: string;
@@ -89,6 +98,19 @@ export class ClientesRepository {
       return mapCliente(row);
     } catch (error) {
       traducirErrorBd(error, TRADUCCIONES_CLIENTE);
+    }
+  }
+
+  async eliminarCliente(id: string): Promise<boolean> {
+    try {
+      const result = await this.#db
+        .deleteFrom('clientes')
+        .where('id', '=', id)
+        .executeTakeFirst();
+
+      return Number(result.numDeletedRows) > 0;
+    } catch (error) {
+      traducirErrorBd(error, TRADUCCIONES_ELIMINACION_CLIENTE);
     }
   }
 }
