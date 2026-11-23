@@ -1,11 +1,23 @@
 interface ApiErrorResponse {
   error?: {
     message?: string;
+    code?: string;
   };
 }
 
-async function mensajeDeError(response: Response): Promise<string> {
+export class ApiError extends Error {
+  readonly code: string | null;
+
+  constructor(message: string, code: string | null = null) {
+    super(message);
+    this.name = 'ApiError';
+    this.code = code;
+  }
+}
+
+async function errorDeResponse(response: Response): Promise<ApiError> {
   let mensaje = `Error ${response.status}`;
+  let codigo: string | null = null;
 
   try {
     const data = (await response.json()) as ApiErrorResponse;
@@ -13,18 +25,22 @@ async function mensajeDeError(response: Response): Promise<string> {
     if (data.error?.message) {
       mensaje = data.error.message;
     }
+
+    if (data.error?.code) {
+      codigo = data.error.code;
+    }
   } catch {
     // La respuesta no traía un cuerpo JSON; se conserva el mensaje por defecto.
   }
 
-  return mensaje;
+  return new ApiError(mensaje, codigo);
 }
 
 export async function obtenerJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
 
   if (!response.ok) {
-    throw new Error(await mensajeDeError(response));
+    throw await errorDeResponse(response);
   }
 
   return (await response.json()) as T;
@@ -42,7 +58,7 @@ export async function enviarJson<T>(
   });
 
   if (!response.ok) {
-    throw new Error(await mensajeDeError(response));
+    throw await errorDeResponse(response);
   }
 
   return (await response.json()) as T;
@@ -52,6 +68,6 @@ export async function eliminarRecurso(url: string): Promise<void> {
   const response = await fetch(url, { method: 'DELETE' });
 
   if (!response.ok) {
-    throw new Error(await mensajeDeError(response));
+    throw await errorDeResponse(response);
   }
 }

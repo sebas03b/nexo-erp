@@ -48,6 +48,51 @@ const CITA_PENDIENTE_CANCELABLE: Cita = {
   motivo: 'Manicure',
 };
 
+const CITA_CONFIRMADA: Cita = {
+  ...CITA_PENDIENTE,
+  id: 'cita-3',
+  clienteNombre: 'Cliente Confirmada',
+  estado: 'Confirmada',
+};
+
+const CITA_EN_PROCESO: Cita = {
+  ...CITA_PENDIENTE,
+  id: 'cita-4',
+  clienteNombre: 'Cliente En Proceso',
+  estado: 'En Proceso',
+};
+
+const CITA_COMPLETADA: Cita = {
+  ...CITA_PENDIENTE,
+  id: 'cita-5',
+  clienteNombre: 'Cliente Completada',
+  estado: 'Completada',
+};
+
+const CITA_CANCELADA: Cita = {
+  ...CITA_PENDIENTE,
+  id: 'cita-6',
+  clienteNombre: 'Cliente Cancelada',
+  estado: 'Cancelada',
+};
+
+type TransicionMock = 'confirmar' | 'iniciar' | 'completar' | 'cancelar';
+
+const TRANSICIONES_PERMITIDAS: Record<EstadoCita, TransicionMock[]> = {
+  Pendiente: ['confirmar', 'cancelar'],
+  Confirmada: ['iniciar', 'cancelar'],
+  'En Proceso': ['completar'],
+  Completada: [],
+  Cancelada: [],
+};
+
+const ESTADO_RESULTANTE: Record<TransicionMock, EstadoCita> = {
+  confirmar: 'Confirmada',
+  iniciar: 'En Proceso',
+  completar: 'Completada',
+  cancelar: 'Cancelada',
+};
+
 function respuestaJson(body: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
@@ -68,8 +113,8 @@ function urlDe(input: RequestInfo | URL): string {
   return input.url;
 }
 
-function rutaDe(input: RequestInfo | URL): string {
-  return new URL(urlDe(input), 'http://nexo.local').pathname;
+function urlCompletaDe(input: RequestInfo | URL): URL {
+  return new URL(urlDe(input), 'http://nexo.local');
 }
 
 function cuerpoJson(init?: RequestInit): Record<string, unknown> | null {
@@ -85,9 +130,17 @@ function cuerpoJson(init?: RequestInit): Record<string, unknown> | null {
 
 interface OpcionesMock {
   citas?: Cita[];
+  errorAgenda?: string;
+  errorAgendaConFiltro?: string;
+  errorClientes?: string;
+  errorEmpleados?: string;
   errorCrear?: string;
   errorTransicion?: string;
+  codigoErrorTransicion?: string;
+  estadoConcurrente?: EstadoCita;
+  retrasarAgenda?: boolean;
   retrasarCreacion?: boolean;
+  retrasarTransicion?: boolean;
 }
 
 function instalarFetch(opciones: OpcionesMock = {}): ReturnType<typeof vi.fn> {
@@ -95,17 +148,72 @@ function instalarFetch(opciones: OpcionesMock = {}): ReturnType<typeof vi.fn> {
 
   const fetchMock = vi.fn(
     (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-      const ruta = rutaDe(input);
+      const url = urlCompletaDe(input);
+      const ruta = url.pathname;
 
       if (ruta === '/api/citas' && (!init?.method || init.method === 'GET')) {
-        return Promise.resolve(respuestaJson(citas));
+        if (opciones.errorAgendaConFiltro && url.searchParams.has('desde')) {
+          return Promise.resolve(
+            respuestaJson(
+              { error: { message: opciones.errorAgendaConFiltro } },
+              500,
+            ),
+          );
+        }
+
+        if (opciones.errorAgenda) {
+          return Promise.resolve(
+            respuestaJson(
+              { error: { message: opciones.errorAgenda } },
+              500,
+            ),
+          );
+        }
+
+        if (opciones.retrasarAgenda) {
+          return new Promise<Response>(() => {});
+        }
+
+        const desde = url.searchParams.get('desde');
+        const hasta = url.searchParams.get('hasta');
+        const citasFiltradas =
+          desde && hasta
+            ? citas.filter((cita) => {
+                const inicio = new Date(cita.inicio).getTime();
+                const fin = new Date(cita.fin).getTime();
+                return (
+                  inicio < new Date(hasta).getTime() &&
+                  fin > new Date(desde).getTime()
+                );
+              })
+            : citas;
+
+        return Promise.resolve(respuestaJson(citasFiltradas));
       }
 
       if (ruta === '/api/clientes') {
+        if (opciones.errorClientes) {
+          return Promise.resolve(
+            respuestaJson(
+              { error: { message: opciones.errorClientes } },
+              500,
+            ),
+          );
+        }
+
         return Promise.resolve(respuestaJson([CLIENTE]));
       }
 
       if (ruta === '/api/empleados') {
+        if (opciones.errorEmpleados) {
+          return Promise.resolve(
+            respuestaJson(
+              { error: { message: opciones.errorEmpleados } },
+              500,
+            ),
+          );
+        }
+
         return Promise.resolve(respuestaJson([EMPLEADO, EMPLEADO_INACTIVO]));
       }
 
@@ -141,45 +249,83 @@ function instalarFetch(opciones: OpcionesMock = {}): ReturnType<typeof vi.fn> {
         return Promise.resolve(respuestaJson(creada, 201));
       }
 
-      const transicion = /^\/api\/citas\/([^/]+)\/(confirmar|iniciar|completar|cancelar)$/.exec(
-        ruta,
-      );
+      const detalle = /^\/api\/citas\/([^/]+)$/.exec(ruta);
+      if (detalle && (!init?.method || init.method === 'GET')) {
+        const id = detalle[1];
+        const cita = citas.find((item) => item.id === id);
+        return Promise.resolve(
+          cita
+            ? respuestaJson(cita)
+            : respuestaJson({ error: { message: 'Cita no encontrada' } }, 404),
+        );
+      }
+
+      const transicion =
+        /^\/api\/citas\/([^/]+)\/(confirmar|iniciar|completar|cancelar)$/.exec(
+          ruta,
+        );
 
       if (transicion) {
-        if (opciones.errorTransicion) {
+        const id = transicion[1];
+        const accion = transicion[2];
+        if (
+          !id ||
+          (accion !== 'confirmar' &&
+            accion !== 'iniciar' &&
+            accion !== 'completar' &&
+            accion !== 'cancelar')
+        ) {
+          return Promise.resolve(respuestaJson({}, 404));
+        }
+
+        const actual = citas.find((cita) => cita.id === id);
+        if (!actual) {
+          return Promise.resolve(
+            respuestaJson({ error: { message: 'Cita no encontrada' } }, 404),
+          );
+        }
+
+        if (!TRANSICIONES_PERMITIDAS[actual.estado].includes(accion)) {
           return Promise.resolve(
             respuestaJson(
-              { error: { message: opciones.errorTransicion } },
+              {
+                error: {
+                  code: 'TRANSICION_CITA_INVALIDA',
+                  message: 'Transición de cita inválida',
+                },
+              },
               409,
             ),
           );
         }
 
-        const id = transicion[1];
-        const accion = transicion[2];
-        if (!id || !accion) {
-          return Promise.resolve(respuestaJson({}, 404));
+        if (opciones.errorTransicion) {
+          if (opciones.estadoConcurrente) {
+            citas = citas.map((cita) =>
+              cita.id === id
+                ? { ...cita, estado: opciones.estadoConcurrente ?? cita.estado }
+                : cita,
+            );
+          }
+
+          return Promise.resolve(
+            respuestaJson(
+              {
+                error: {
+                  code: opciones.codigoErrorTransicion ?? 'CITA_SOLAPADA',
+                  message: opciones.errorTransicion,
+                },
+              },
+              409,
+            ),
+          );
         }
 
-        if (
-          accion !== 'confirmar' &&
-          accion !== 'iniciar' &&
-          accion !== 'completar' &&
-          accion !== 'cancelar'
-        ) {
-          return Promise.resolve(respuestaJson({}, 404));
+        if (opciones.retrasarTransicion) {
+          return new Promise<Response>(() => {});
         }
 
-        const estados: Record<
-          'confirmar' | 'iniciar' | 'completar' | 'cancelar',
-          EstadoCita
-        > = {
-          confirmar: 'Confirmada',
-          iniciar: 'En Proceso',
-          completar: 'Completada',
-          cancelar: 'Cancelada',
-        };
-        const estadoNuevo = estados[accion];
+        const estadoNuevo = ESTADO_RESULTANTE[accion];
         const citasActualizadas = citas.map((cita) =>
           cita.id === id ? { ...cita, estado: estadoNuevo } : cita,
         );
@@ -193,12 +339,42 @@ function instalarFetch(opciones: OpcionesMock = {}): ReturnType<typeof vi.fn> {
         );
       }
 
-      return Promise.resolve(respuestaJson({ error: { message: 'No encontrado' } }, 404));
+      return Promise.resolve(
+        respuestaJson({ error: { message: 'No encontrado' } }, 404),
+      );
     },
   );
 
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
+}
+
+function filaDe(clienteNombre: string): HTMLElement {
+  const fila = screen.getByText(clienteNombre).closest('tr');
+
+  if (!(fila instanceof HTMLElement)) {
+    throw new Error(`No se encontró la fila de ${clienteNombre}`);
+  }
+
+  return fila;
+}
+
+function completarFormulario(): void {
+  fireEvent.change(screen.getByLabelText('Cliente'), {
+    target: { value: CLIENTE.id },
+  });
+  fireEvent.change(screen.getByLabelText('Empleado'), {
+    target: { value: EMPLEADO.id },
+  });
+  fireEvent.change(screen.getByLabelText('Inicio'), {
+    target: { value: '2026-11-25T10:00' },
+  });
+  fireEvent.change(screen.getByLabelText('Fin'), {
+    target: { value: '2026-11-25T11:00' },
+  });
+  fireEvent.change(screen.getByLabelText('Motivo'), {
+    target: { value: 'Corte y color' },
+  });
 }
 
 describe('Agenda de citas', () => {
@@ -230,21 +406,7 @@ describe('Agenda de citas', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: 'Nueva cita' }),
     );
-    fireEvent.change(screen.getByLabelText('Cliente'), {
-      target: { value: CLIENTE.id },
-    });
-    fireEvent.change(screen.getByLabelText('Empleado'), {
-      target: { value: EMPLEADO.id },
-    });
-    fireEvent.change(screen.getByLabelText('Inicio'), {
-      target: { value: '2026-11-25T10:00' },
-    });
-    fireEvent.change(screen.getByLabelText('Fin'), {
-      target: { value: '2026-11-25T11:00' },
-    });
-    fireEvent.change(screen.getByLabelText('Motivo'), {
-      target: { value: '  Corte y color  ' },
-    });
+    completarFormulario();
     fireEvent.click(screen.getByRole('button', { name: 'Crear cita' }));
 
     await waitFor(() => {
@@ -275,9 +437,72 @@ describe('Agenda de citas', () => {
     );
 
     const selector = screen.getByLabelText('Empleado');
-    expect(within(selector).getByRole('option', { name: EMPLEADO.nombre })).toBeInTheDocument();
     expect(
-      within(selector).queryByRole('option', { name: EMPLEADO_INACTIVO.nombre }),
+      within(selector).getByRole('option', { name: EMPLEADO.nombre }),
+    ).toBeInTheDocument();
+    expect(
+      within(selector).queryByRole('option', {
+        name: EMPLEADO_INACTIVO.nombre,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('expone exactamente las acciones permitidas por cada estado', async () => {
+    instalarFetch({
+      citas: [
+        CITA_PENDIENTE,
+        CITA_CONFIRMADA,
+        CITA_EN_PROCESO,
+        CITA_COMPLETADA,
+        CITA_CANCELADA,
+      ],
+    });
+
+    render(<Citas />);
+
+    await screen.findByText(CITA_PENDIENTE.clienteNombre);
+
+    const pendiente = filaDe(CITA_PENDIENTE.clienteNombre);
+    expect(
+      within(pendiente).getByRole('button', {
+        name: `Confirmar cita de ${CITA_PENDIENTE.clienteNombre}`,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(pendiente).getByRole('button', {
+        name: `Cancelar cita de ${CITA_PENDIENTE.clienteNombre}`,
+      }),
+    ).toBeInTheDocument();
+
+    const confirmada = filaDe(CITA_CONFIRMADA.clienteNombre);
+    expect(
+      within(confirmada).getByRole('button', {
+        name: `Iniciar cita de ${CITA_CONFIRMADA.clienteNombre}`,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(confirmada).getByRole('button', {
+        name: `Cancelar cita de ${CITA_CONFIRMADA.clienteNombre}`,
+      }),
+    ).toBeInTheDocument();
+
+    const enProceso = filaDe(CITA_EN_PROCESO.clienteNombre);
+    expect(
+      within(enProceso).getByRole('button', {
+        name: `Completar cita de ${CITA_EN_PROCESO.clienteNombre}`,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(enProceso).queryByRole('button', {
+        name: `Cancelar cita de ${CITA_EN_PROCESO.clienteNombre}`,
+      }),
+    ).not.toBeInTheDocument();
+
+    expect(
+      within(filaDe(CITA_COMPLETADA.clienteNombre)).queryByRole('button'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(filaDe(CITA_CANCELADA.clienteNombre)).queryByRole('button'),
     ).not.toBeInTheDocument();
   });
 
@@ -288,39 +513,45 @@ describe('Agenda de citas', () => {
 
     render(<Citas />);
 
-    const filaFlujo = (await screen.findByText(CLIENTE.nombre)).closest('tr');
-    const filaCancelable = (
-      await screen.findByText('Carlos Ramírez')
-    ).closest('tr');
-    expect(filaFlujo).not.toBeNull();
-    expect(filaCancelable).not.toBeNull();
+    await screen.findByText(CLIENTE.nombre);
+    await screen.findByText('Carlos Ramírez');
+    const filaFlujo = filaDe(CLIENTE.nombre);
+    const filaCancelable = filaDe('Carlos Ramírez');
 
     fireEvent.click(
-      within(filaFlujo as HTMLElement).getByRole('button', { name: 'Confirmar' }),
+      within(filaFlujo).getByRole('button', {
+        name: `Confirmar cita de ${CLIENTE.nombre}`,
+      }),
     );
     await waitFor(() =>
-      expect(within(filaFlujo as HTMLElement).getByText('Confirmada')).toBeInTheDocument(),
-    );
-
-    fireEvent.click(
-      within(filaFlujo as HTMLElement).getByRole('button', { name: 'Iniciar' }),
-    );
-    await waitFor(() =>
-      expect(within(filaFlujo as HTMLElement).getByText('En Proceso')).toBeInTheDocument(),
+      expect(within(filaFlujo).getByText('Confirmada')).toBeInTheDocument(),
     );
 
     fireEvent.click(
-      within(filaFlujo as HTMLElement).getByRole('button', { name: 'Completar' }),
+      within(filaFlujo).getByRole('button', {
+        name: `Iniciar cita de ${CLIENTE.nombre}`,
+      }),
     );
     await waitFor(() =>
-      expect(within(filaFlujo as HTMLElement).getByText('Completada')).toBeInTheDocument(),
+      expect(within(filaFlujo).getByText('En Proceso')).toBeInTheDocument(),
     );
 
     fireEvent.click(
-      within(filaCancelable as HTMLElement).getByRole('button', { name: 'Cancelar' }),
+      within(filaFlujo).getByRole('button', {
+        name: `Completar cita de ${CLIENTE.nombre}`,
+      }),
     );
     await waitFor(() =>
-      expect(within(filaCancelable as HTMLElement).getByText('Cancelada')).toBeInTheDocument(),
+      expect(within(filaFlujo).getByText('Completada')).toBeInTheDocument(),
+    );
+
+    fireEvent.click(
+      within(filaCancelable).getByRole('button', {
+        name: 'Cancelar cita de Carlos Ramírez',
+      }),
+    );
+    await waitFor(() =>
+      expect(within(filaCancelable).getByText('Cancelada')).toBeInTheDocument(),
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -342,17 +573,55 @@ describe('Agenda de citas', () => {
   });
 
   it('muestra el error del backend al intentar una transición', async () => {
-    instalarFetch({ errorTransicion: 'La cita cambió de estado' });
+    instalarFetch({ errorTransicion: 'La cita ya tiene otra transición' });
 
     render(<Citas />);
 
-    const fila = (await screen.findByText(CLIENTE.nombre)).closest('tr');
-    expect(fila).not.toBeNull();
+    await screen.findByText(CLIENTE.nombre);
+    const fila = filaDe(CLIENTE.nombre);
     fireEvent.click(
-      within(fila as HTMLElement).getByRole('button', { name: 'Confirmar' }),
+      within(fila).getByRole('button', {
+        name: `Confirmar cita de ${CLIENTE.nombre}`,
+      }),
+    );
+
+    expect(
+      await screen.findByText('La cita ya tiene otra transición'),
+    ).toBeInTheDocument();
+  });
+
+  it('reconcilia el estado visible después de un conflicto concurrente', async () => {
+    const fetchMock = instalarFetch({
+      errorTransicion: 'La cita cambió de estado',
+      codigoErrorTransicion: 'CONFLICTO_ESTADO_CITA',
+      estadoConcurrente: 'Confirmada',
+    });
+
+    render(<Citas />);
+
+    await screen.findByText(CLIENTE.nombre);
+    const fila = filaDe(CLIENTE.nombre);
+    fireEvent.click(
+      within(fila).getByRole('button', {
+        name: `Confirmar cita de ${CLIENTE.nombre}`,
+      }),
     );
 
     expect(await screen.findByText('La cita cambió de estado')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(fila).getByText('Confirmada')).toBeInTheDocument(),
+    );
+    expect(
+      within(fila).queryByRole('button', {
+        name: `Confirmar cita de ${CLIENTE.nombre}`,
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(fila).getByRole('button', {
+        name: `Iniciar cita de ${CLIENTE.nombre}`,
+      }),
+    ).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(`/api/citas/${CITA_PENDIENTE.id}`);
   });
 
   it('filtra la agenda por el rango diario de Bogotá', async () => {
@@ -371,6 +640,122 @@ describe('Agenda de citas', () => {
     });
   });
 
+  it('no agrega una cita creada fuera del filtro activo', async () => {
+    instalarFetch();
+
+    render(<Citas />);
+
+    fireEvent.change(await screen.findByLabelText('Fecha'), {
+      target: { value: '2026-11-26' },
+    });
+    await screen.findByText('No hay citas para mostrar.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Nueva cita' }));
+    completarFormulario();
+    fireEvent.click(screen.getByRole('button', { name: 'Crear cita' }));
+
+    await waitFor(() =>
+      expect(screen.getByText('No hay citas para mostrar.')).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(CLIENTE.nombre)).not.toBeInTheDocument();
+  });
+
+  it('no conserva la lista anterior cuando falla el filtro', async () => {
+    instalarFetch({ errorAgendaConFiltro: 'No se pudo filtrar la agenda' });
+
+    render(<Citas />);
+
+    await screen.findByText(CLIENTE.nombre);
+    fireEvent.change(screen.getByLabelText('Fecha'), {
+      target: { value: '2026-11-26' },
+    });
+
+    expect(
+      await screen.findByText('No se pudo filtrar la agenda'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.queryByText(CLIENTE.nombre)).not.toBeInTheDocument();
+  });
+
+  it('muestra el error al crear una cita y conserva el modal abierto', async () => {
+    instalarFetch({ errorCrear: 'El empleado ya tiene una cita' });
+
+    render(<Citas />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Nueva cita' }),
+    );
+    completarFormulario();
+    fireEvent.click(screen.getByRole('button', { name: 'Crear cita' }));
+
+    expect(
+      await screen.findByText('El empleado ya tiene una cita'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('anuncia la carga de la agenda', () => {
+    instalarFetch({ retrasarAgenda: true });
+
+    render(<Citas />);
+
+    expect(screen.getByText('Cargando agenda…')).toBeInTheDocument();
+    expect(screen.getByText('Cargando clientes y empleados…')).toBeInTheDocument();
+  });
+
+  it('muestra el error de carga de la agenda', async () => {
+    instalarFetch({ errorAgenda: 'No se pudo cargar la agenda' });
+
+    render(<Citas />);
+
+    expect(
+      await screen.findByText('No se pudo cargar la agenda'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('deshabilita la creación si falla un catálogo y ofrece reintento', async () => {
+    instalarFetch({ errorClientes: 'No se pudieron cargar los clientes' });
+
+    render(<Citas />);
+
+    expect(
+      await screen.findByText('No se pudieron cargar los clientes'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nueva cita' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Reintentar catálogos' }),
+    ).toBeInTheDocument();
+  });
+
+  it('gestiona foco, Escape y contención de Tab en el modal', async () => {
+    instalarFetch();
+
+    render(<Citas />);
+
+    const nuevaCita = await screen.findByRole('button', { name: 'Nueva cita' });
+    fireEvent.click(nuevaCita);
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByLabelText('Cliente')).toHaveFocus();
+
+    const cerrar = screen.getByRole('button', {
+      name: 'Cerrar modal de nueva cita',
+    });
+    const crear = screen.getByRole('button', { name: 'Crear cita' });
+    cerrar.focus();
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(crear).toHaveFocus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(cerrar).toHaveFocus();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(nuevaCita).toHaveFocus();
+  });
+
   it('deshabilita los controles mientras se crea una cita', async () => {
     instalarFetch({ retrasarCreacion: true });
 
@@ -379,18 +764,7 @@ describe('Agenda de citas', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: 'Nueva cita' }),
     );
-    fireEvent.change(screen.getByLabelText('Cliente'), {
-      target: { value: CLIENTE.id },
-    });
-    fireEvent.change(screen.getByLabelText('Empleado'), {
-      target: { value: EMPLEADO.id },
-    });
-    fireEvent.change(screen.getByLabelText('Inicio'), {
-      target: { value: '2026-11-25T10:00' },
-    });
-    fireEvent.change(screen.getByLabelText('Fin'), {
-      target: { value: '2026-11-25T11:00' },
-    });
+    completarFormulario();
     fireEvent.click(screen.getByRole('button', { name: 'Crear cita' }));
 
     await waitFor(() =>
@@ -400,5 +774,29 @@ describe('Agenda de citas', () => {
     expect(
       within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancelar' }),
     ).toBeDisabled();
+  });
+
+  it('deshabilita los controles mientras se transiciona una cita', async () => {
+    instalarFetch({ retrasarTransicion: true });
+
+    render(<Citas />);
+
+    await screen.findByText(CLIENTE.nombre);
+    const fila = filaDe(CLIENTE.nombre);
+    fireEvent.click(
+      within(fila).getByRole('button', {
+        name: `Confirmar cita de ${CLIENTE.nombre}`,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        within(fila).getByRole('button', {
+          name: `Confirmar cita de ${CLIENTE.nombre}, en curso`,
+        }),
+      ).toBeDisabled(),
+    );
+    expect(screen.getByRole('button', { name: 'Nueva cita' })).toBeDisabled();
+    expect(screen.getByLabelText('Fecha')).toBeDisabled();
   });
 });

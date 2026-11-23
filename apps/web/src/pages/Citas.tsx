@@ -1,11 +1,12 @@
 import {
   useEffect,
+  useRef,
   useState,
   type FormEvent,
   type JSX,
 } from 'react';
 
-import { enviarJson, obtenerJson } from '../lib/api';
+import { ApiError, enviarJson, obtenerJson } from '../lib/api';
 import {
   convertirDateTimeLocalAISO,
   formatearFechaHora,
@@ -39,6 +40,9 @@ const ACCIONES_POR_ESTADO: Record<EstadoCita, AccionCita[]> = {
   Completada: [],
   Cancelada: [],
 };
+
+const SELECTOR_FOCUSABLE =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 const CLASES_ESTADO: Record<EstadoCita, string> = {
   Pendiente: 'estado-pendiente',
@@ -80,11 +84,18 @@ export function Citas(): JSX.Element {
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [cargando, setCargando] = useState(true);
   const [catalogosCargando, setCatalogosCargando] = useState(true);
+  const [catalogosError, setCatalogosError] = useState<string | null>(null);
+  const [recargaCatalogos, setRecargaCatalogos] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [errorAccion, setErrorAccion] = useState<string | null>(null);
   const [fechaFiltro, setFechaFiltro] = useState('');
   const [modalAbierto, setModalAbierto] = useState(false);
   const [operacion, setOperacion] = useState<string | null>(null);
+
+  const modalRef = useRef<HTMLElement>(null);
+  const nuevaCitaRef = useRef<HTMLButtonElement>(null);
+  const modalPrevioRef = useRef(false);
+  const operacionRef = useRef<string | null>(null);
 
   const [clienteId, setClienteId] = useState('');
   const [empleadoId, setEmpleadoId] = useState('');
@@ -98,6 +109,7 @@ export function Citas(): JSX.Element {
     async function cargarAgenda(): Promise<void> {
       setCargando(true);
       setError(null);
+      setCitas([]);
 
       try {
         let ruta = '/api/citas';
@@ -139,31 +151,47 @@ export function Citas(): JSX.Element {
 
     async function cargarCatalogos(): Promise<void> {
       setCatalogosCargando(true);
+      setCatalogosError(null);
 
-      try {
-        const [clientesApi, empleadosApi] = await Promise.all([
-          obtenerJson<Cliente[]>('/api/clientes'),
-          obtenerJson<Empleado[]>('/api/empleados'),
-        ]);
+      const [resultadoClientes, resultadoEmpleados] = await Promise.allSettled([
+        obtenerJson<Cliente[]>('/api/clientes'),
+        obtenerJson<Empleado[]>('/api/empleados'),
+      ]);
 
-        if (activo) {
-          setClientes(clientesApi);
-          setEmpleados(empleadosApi);
-        }
-      } catch (caught) {
-        if (activo) {
-          setErrorAccion(
-            mensajeDeError(
-              caught,
-              'No se pudieron cargar los clientes y empleados',
-            ),
-          );
-        }
-      } finally {
-        if (activo) {
-          setCatalogosCargando(false);
-        }
+      if (!activo) {
+        return;
       }
+
+      const errores: string[] = [];
+
+      if (resultadoClientes.status === 'fulfilled') {
+        setClientes(resultadoClientes.value);
+      } else {
+        setClientes([]);
+        errores.push(
+          mensajeDeError(
+            resultadoClientes.reason,
+            'No se pudieron cargar los clientes',
+          ),
+        );
+      }
+
+      if (resultadoEmpleados.status === 'fulfilled') {
+        setEmpleados(resultadoEmpleados.value);
+      } else {
+        setEmpleados([]);
+        errores.push(
+          mensajeDeError(
+            resultadoEmpleados.reason,
+            'No se pudieron cargar los empleados',
+          ),
+        );
+      }
+
+      setCatalogosError(
+        errores.length > 0 ? errores.join(' ') : null,
+      );
+      setCatalogosCargando(false);
     }
 
     void cargarCatalogos();
@@ -171,7 +199,93 @@ export function Citas(): JSX.Element {
     return () => {
       activo = false;
     };
-  }, []);
+  }, [recargaCatalogos]);
+
+  useEffect(() => {
+    operacionRef.current = operacion;
+  }, [operacion]);
+
+  useEffect(() => {
+    const estabaAbierto = modalPrevioRef.current;
+    modalPrevioRef.current = modalAbierto;
+
+    if (estabaAbierto && !modalAbierto) {
+      nuevaCitaRef.current?.focus();
+    }
+  }, [modalAbierto]);
+
+  useEffect(() => {
+    if (!modalAbierto) {
+      return;
+    }
+
+    const modal = modalRef.current;
+    if (!modal) {
+      return;
+    }
+
+    const modalElement: HTMLElement = modal;
+
+    function obtenerFocusables(): HTMLElement[] {
+      return Array.from(
+        modalElement.querySelectorAll<HTMLElement>(SELECTOR_FOCUSABLE),
+      );
+    }
+
+    const focusables = obtenerFocusables();
+    const primerFoco = focusables.at(0);
+    const focoInicial =
+      modalElement.querySelector<HTMLElement>('#cita-cliente') ?? primerFoco;
+    focoInicial?.focus();
+
+    function manejarTeclado(event: KeyboardEvent): void {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+
+        if (operacionRef.current !== 'crear') {
+          setModalAbierto(false);
+        }
+
+        return;
+      }
+
+      if (event.key !== 'Tab') {
+        return;
+      }
+
+      const focusablesActuales = obtenerFocusables();
+      const primerFocoActual = focusablesActuales.at(0);
+      const ultimoFocoActual = focusablesActuales.at(-1);
+
+      if (!primerFocoActual || !ultimoFocoActual) {
+        return;
+      }
+
+      const focoActual = document.activeElement;
+      const focoFuera =
+        !(focoActual instanceof Node) || !modalElement.contains(focoActual);
+
+      if (
+        event.shiftKey &&
+        (focoActual === primerFocoActual || focoFuera)
+      ) {
+        event.preventDefault();
+        ultimoFocoActual.focus();
+      } else if (
+        !event.shiftKey &&
+        (focoActual === ultimoFocoActual || focoFuera)
+      ) {
+        event.preventDefault();
+        primerFocoActual.focus();
+      }
+    }
+
+    document.addEventListener('keydown', manejarTeclado);
+
+    return () => {
+      document.removeEventListener('keydown', manejarTeclado);
+    };
+  }, [modalAbierto]);
 
   function abrirModal(): void {
     setErrorAccion(null);
@@ -262,6 +376,26 @@ export function Citas(): JSX.Element {
         ),
       );
     } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.code === 'CONFLICTO_ESTADO_CITA'
+      ) {
+        try {
+          const reconciliada = await obtenerJson<Cita>(
+            `/api/citas/${cita.id}`,
+          );
+          setCitas((actuales) =>
+            actuales.map((actual) =>
+              actual.id === cita.id ? reconciliada : actual,
+            ),
+          );
+        } catch {
+          setCitas((actuales) =>
+            actuales.filter((actual) => actual.id !== cita.id),
+          );
+        }
+      }
+
       setErrorAccion(
         mensajeDeError(caught, 'No se pudo actualizar la cita'),
       );
@@ -283,10 +417,13 @@ export function Citas(): JSX.Element {
           </p>
         </div>
         <button
+          ref={nuevaCitaRef}
           type="button"
           className="boton-primario"
           onClick={abrirModal}
-          disabled={catalogosCargando || operacion !== null}
+          disabled={
+            catalogosCargando || catalogosError !== null || operacion !== null
+          }
         >
           Nueva cita
         </button>
@@ -298,13 +435,36 @@ export function Citas(): JSX.Element {
         </p>
       ) : null}
 
+      {catalogosCargando ? (
+        <p role="status" aria-live="polite" className="app-description">
+          Cargando clientes y empleados…
+        </p>
+      ) : null}
+
+      {catalogosError ? (
+        <div role="alert" className="alert alert-error catalogo-error">
+          <span>{catalogosError}</span>
+          <button
+            type="button"
+            className="boton-secundario boton-compacto"
+            onClick={() => setRecargaCatalogos((valor) => valor + 1)}
+          >
+            Reintentar catálogos
+          </button>
+        </div>
+      ) : null}
+
       {errorAccion && !modalAbierto ? (
         <p role="alert" className="alert alert-error">
           {errorAccion}
         </p>
       ) : null}
 
-      <section className="app-card" aria-labelledby="agenda-citas-titulo">
+      <section
+        className="app-card"
+        aria-labelledby="agenda-citas-titulo"
+        aria-busy={cargando || operacion !== null}
+      >
         <div className="seccion-cabecera agenda-filtros">
           <div>
             <h3 id="agenda-citas-titulo" className="seccion-titulo">
@@ -335,11 +495,18 @@ export function Citas(): JSX.Element {
         </div>
 
         {cargando ? (
-          <p className="app-empty">Cargando agenda…</p>
+          <p role="status" aria-live="polite" className="app-empty">
+            Cargando agenda…
+          </p>
         ) : citas.length === 0 ? (
           <p className="app-empty">No hay citas para mostrar.</p>
         ) : (
-          <div className="tabla-contenedor citas-tabla-contenedor">
+          <div
+            className="tabla-contenedor citas-tabla-contenedor"
+            role="region"
+            aria-label="Tabla de citas, desplazamiento horizontal"
+            tabIndex={0}
+          >
             <table
               className="productos-tabla citas-tabla"
               aria-label="Citas programadas"
@@ -387,6 +554,9 @@ export function Citas(): JSX.Element {
                               type="button"
                               className="boton-secundario boton-compacto"
                               disabled={operacion !== null}
+                              aria-label={`${accion.etiqueta} cita de ${cita.clienteNombre}${
+                                enCurso ? ', en curso' : ''
+                              }`}
                               onClick={() => {
                                 void transicionarCita(cita, accion.transicion);
                               }}
@@ -408,6 +578,7 @@ export function Citas(): JSX.Element {
       {modalAbierto ? (
         <div className="modal-backdrop">
           <section
+            ref={modalRef}
             className="modal"
             role="dialog"
             aria-modal="true"
