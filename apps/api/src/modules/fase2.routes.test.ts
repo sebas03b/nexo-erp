@@ -93,6 +93,9 @@ describe('Endpoints REST de inventario y ventas', () => {
     await db.deleteFrom('facturas').execute();
     await db.deleteFrom('pedido_items').execute();
     await db.deleteFrom('pedidos').execute();
+    await db.deleteFrom('carrito_comandos').execute();
+    await db.deleteFrom('carrito_items').execute();
+    await db.deleteFrom('carritos').execute();
     await db.deleteFrom('stock').execute();
     await db.deleteFrom('productos').execute();
     await db.deleteFrom('clientes').execute();
@@ -130,14 +133,40 @@ describe('Endpoints REST de inventario y ventas', () => {
     return response.json<ProductoJson>();
   }
 
+  async function crearCarritoConItems(
+    items: Array<{ productoId: string; cantidad: number }>,
+  ): Promise<string> {
+    const carritoRes = await app.inject({ method: 'POST', url: '/api/carritos' });
+    expect(carritoRes.statusCode).toBe(201);
+    const carrito = carritoRes.json<{ id: string }>();
+
+    for (const item of items) {
+      await app.inject({
+        method: 'PUT',
+        url: `/api/stock/${item.productoId}`,
+        payload: { cantidad: Math.max(item.cantidad, 999) },
+      });
+
+      const cmd = await app.inject({
+        method: 'POST',
+        url: `/api/carritos/${carrito.id}/comandos`,
+        payload: { accion: 'AGREGAR_ITEM', payload: item },
+      });
+      expect(cmd.statusCode).toBe(200);
+    }
+
+    return carrito.id;
+  }
+
   async function crearPedidoBorrador(): Promise<PedidoJson> {
     const producto = await crearProducto(100);
+    const carritoId = await crearCarritoConItems([{ productoId: producto.id, cantidad: 1 }]);
     const response = await app.inject({
       method: 'POST',
       url: '/api/pedidos',
       payload: {
         documentoCliente: DOCUMENTO_CLIENTE,
-        items: [{ productoId: producto.id, cantidad: 1 }],
+        carritoId,
       },
     });
 
@@ -270,13 +299,14 @@ describe('Endpoints REST de inventario y ventas', () => {
 
   it('rechaza eliminar un producto que hace parte de un pedido', async () => {
     const producto = await crearProducto(100);
+    const carritoId = await crearCarritoConItems([{ productoId: producto.id, cantidad: 1 }]);
 
     const creacion = await app.inject({
       method: 'POST',
       url: '/api/pedidos',
       payload: {
         documentoCliente: DOCUMENTO_CLIENTE,
-        items: [{ productoId: producto.id, cantidad: 1 }],
+        carritoId,
       },
     });
     expect(creacion.statusCode).toBe(201);
@@ -300,14 +330,22 @@ describe('Endpoints REST de inventario y ventas', () => {
       payload: { cantidad: 5 },
     });
 
+    const carritoRes = await app.inject({ method: 'POST', url: '/api/carritos' });
+    expect(carritoRes.statusCode).toBe(201);
+    const carrito = carritoRes.json<{ id: string }>();
+    const agregar = await app.inject({
+      method: 'POST',
+      url: `/api/carritos/${carrito.id}/comandos`,
+      payload: { accion: 'AGREGAR_ITEM', payload: { productoId: producto.id, cantidad: 2 } },
+    });
+    expect(agregar.statusCode).toBe(200);
+
     const creacion = await app.inject({
       method: 'POST',
       url: '/api/pedidos',
       payload: {
         documentoCliente: `  ${DOCUMENTO_CLIENTE}  `,
-        items: [{ productoId: producto.id, cantidad: 2 }],
-        descuento: 10,
-        impuesto: 5,
+        carritoId: carrito.id,
       },
     });
 
@@ -319,9 +357,9 @@ describe('Endpoints REST de inventario y ventas', () => {
       clienteId,
       estado: 'Borrador',
       subtotal: 200,
-      descuento: 10,
-      impuesto: 5,
-      total: 195,
+      descuento: 0,
+      impuesto: 0,
+      total: 200,
       items: [{ productoId: producto.id, cantidad: 2, precioUnitario: 100 }],
     });
 
@@ -385,13 +423,14 @@ describe('Endpoints REST de inventario y ventas', () => {
 
   it('expone datos legibles del cliente y de los productos en el listado y el detalle', async () => {
     const producto = await crearProducto(100);
+    const carritoId = await crearCarritoConItems([{ productoId: producto.id, cantidad: 2 }]);
 
     const creacion = await app.inject({
       method: 'POST',
       url: '/api/pedidos',
       payload: {
         documentoCliente: DOCUMENTO_CLIENTE,
-        items: [{ productoId: producto.id, cantidad: 2 }],
+        carritoId,
       },
     });
 
@@ -455,12 +494,28 @@ describe('Endpoints REST de inventario y ventas', () => {
     });
 
     try {
+      await appConOtrasEstrategias.inject({
+        method: 'PUT',
+        url: `/api/stock/${producto.id}`,
+        payload: { cantidad: 10 },
+      });
+
+      const carritoRes = await appConOtrasEstrategias.inject({ method: 'POST', url: '/api/carritos' });
+      expect(carritoRes.statusCode).toBe(201);
+      const carrito = carritoRes.json<{ id: string }>();
+      const cmd = await appConOtrasEstrategias.inject({
+        method: 'POST',
+        url: `/api/carritos/${carrito.id}/comandos`,
+        payload: { accion: 'AGREGAR_ITEM', payload: { productoId: producto.id, cantidad: 2 } },
+      });
+      expect(cmd.statusCode).toBe(200);
+
       const response = await appConOtrasEstrategias.inject({
         method: 'POST',
         url: '/api/pedidos',
         payload: {
           documentoCliente: DOCUMENTO_CLIENTE,
-          items: [{ productoId: producto.id, cantidad: 2 }],
+          carritoId: carrito.id,
         },
       });
 
@@ -478,13 +533,28 @@ describe('Endpoints REST de inventario y ventas', () => {
 
   it('rechaza pedidos con datos inválidos o clientes inexistentes', async () => {
     const producto = await crearProducto();
+    await app.inject({
+      method: 'PUT',
+      url: `/api/stock/${producto.id}`,
+      payload: { cantidad: 10 },
+    });
+
+    const carritoRes = await app.inject({ method: 'POST', url: '/api/carritos' });
+    expect(carritoRes.statusCode).toBe(201);
+    const carrito = carritoRes.json<{ id: string }>();
+    const agregar = await app.inject({
+      method: 'POST',
+      url: `/api/carritos/${carrito.id}/comandos`,
+      payload: { accion: 'AGREGAR_ITEM', payload: { productoId: producto.id, cantidad: 1 } },
+    });
+    expect(agregar.statusCode).toBe(200);
 
     const clienteInexistente = await app.inject({
       method: 'POST',
       url: '/api/pedidos',
       payload: {
         documentoCliente: 'DOCUMENTO-INEXISTENTE',
-        items: [{ productoId: producto.id, cantidad: 1 }],
+        carritoId: carrito.id,
       },
     });
     expect(clienteInexistente.statusCode).toBe(404);
@@ -492,14 +562,18 @@ describe('Endpoints REST de inventario y ventas', () => {
       error: { code: 'CLIENTE_NO_ENCONTRADO' },
     });
 
+    const carritoVacioRes = await app.inject({ method: 'POST', url: '/api/carritos' });
+    expect(carritoVacioRes.statusCode).toBe(201);
+    const carritoVacio = carritoVacioRes.json<{ id: string }>();
+
     const sinItems = await app.inject({
       method: 'POST',
       url: '/api/pedidos',
-      payload: { documentoCliente: DOCUMENTO_CLIENTE, items: [] },
+      payload: { documentoCliente: DOCUMENTO_CLIENTE, carritoId: carritoVacio.id },
     });
     expect(sinItems.statusCode).toBe(400);
     expect(sinItems.json()).toMatchObject({
-      error: { code: 'DATOS_INVALIDOS' },
+      error: { code: 'CARRITO_VACIO' },
     });
   });
 

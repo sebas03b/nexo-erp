@@ -10,3 +10,7 @@ export interface ClienteResumen {
 export interface VerificadorClientes {
   obtenerPorDocumento(documento: string): Promise<ClienteResumen | null>;
 }
+
+export interface ConsultorStock {
+  obtenerCantidadStock(productoId: string): Promise<number | null>;
+}

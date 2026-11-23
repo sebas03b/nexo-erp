@@ -66,6 +66,31 @@ export interface FacturasTable {
   payload_externo: ColumnType<object | null, string | null, string | null>;
 }
 
+export interface CarritosTable {
+  id: Generated<string>;
+  estado: 'Abierto' | 'Cerrado' | 'Descartado';
+  creado_en: Generated<Date>;
+  actualizado_en: Generated<Date>;
+}
+
+export interface CarritoItemsTable {
+  carrito_id: string;
+  producto_id: string;
+  cantidad: number;
+  precio_unitario: NumericColumn;
+}
+
+export interface CarritoComandosTable {
+  id: Generated<string>;
+  carrito_id: string;
+  tipo: 'AGREGAR_ITEM' | 'DECREMENTAR_ITEM' | 'QUITAR_ITEM' | 'ESTABLECER_CANTIDAD';
+  payload: ColumnType<object, string, string>;
+  estado_anterior: ColumnType<object | null, string | null, string | null>;
+  item_removido: ColumnType<object | null, string | null, string | null>;
+  deshecho: Generated<boolean>;
+  creado_en: Generated<Date>;
+}
+
 export interface Database {
   usuarios: UsuariosTable;
   clientes: ClientesTable;
@@ -75,4 +100,7 @@ export interface Database {
   pedidos: PedidosTable;
   pedido_items: PedidoItemsTable;
   facturas: FacturasTable;
+  carritos: CarritosTable;
+  carrito_items: CarritoItemsTable;
+  carrito_comandos: CarritoComandosTable;
 }

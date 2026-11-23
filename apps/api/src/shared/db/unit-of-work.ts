@@ -41,6 +41,10 @@ export class UnitOfWork<TEvents extends EventMap> {
     this.#outbox = outbox;
   }
 
+  get db(): Kysely<Database> {
+    return this.#db;
+  }
+
   async execute<TResult>(
     work: (context: UnitOfWorkContext<TEvents>) => Promise<TResult>,
     options: UnitOfWorkOptions = {},

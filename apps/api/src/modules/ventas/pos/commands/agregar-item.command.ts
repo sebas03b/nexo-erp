@@ -8,19 +8,23 @@ export class AgregarItemCommand implements Comando {
   #productoId: string;
   #cantidad: number;
   #precioUnitario: number;
-  #itemAnterior: ItemCarrito | undefined;
-  #ejecutado = false;
+  #itemAnterior: ItemCarrito | null | undefined;
+  #ejecutado: boolean;
 
   constructor(
     carrito: Carrito,
     productoId: string,
     cantidad: number,
     precioUnitario: number,
+    estadoAnterior?: ItemCarrito | null,
+    ejecutado?: boolean,
   ) {
     this.#carrito = carrito;
     this.#productoId = productoId;
     this.#cantidad = cantidad;
     this.#precioUnitario = precioUnitario;
+    this.#itemAnterior = estadoAnterior;
+    this.#ejecutado = ejecutado ?? estadoAnterior !== undefined;
   }
 
   async ejecutar(): Promise<void> {
@@ -29,16 +33,12 @@ export class AgregarItemCommand implements Comando {
     }
 
     const existente = this.#carrito.obtenerItem(this.#productoId);
+    this.#itemAnterior = existente ?? null;
 
     if (existente) {
-      this.#itemAnterior = { ...existente };
-      existente.cantidad += this.#cantidad;
+      this.#carrito.fijarCantidad(this.#productoId, existente.cantidad + this.#cantidad);
     } else {
-      this.#carrito.agregarItem(
-        this.#productoId,
-        this.#cantidad,
-        this.#precioUnitario,
-      );
+      this.#carrito.agregarItem(this.#productoId, this.#cantidad, this.#precioUnitario);
     }
 
     this.#ejecutado = true;
@@ -49,14 +49,16 @@ export class AgregarItemCommand implements Comando {
       return;
     }
 
-    const existente = this.#carrito.obtenerItem(this.#productoId);
-
-    if (existente && this.#itemAnterior) {
-      existente.cantidad = this.#itemAnterior.cantidad;
+    if (this.#itemAnterior) {
+      this.#carrito.restaurarItem(this.#itemAnterior);
     } else {
       this.#carrito.quitarItem(this.#productoId);
     }
 
     this.#ejecutado = false;
+  }
+
+  obtenerEstadoAnterior(): ItemCarrito | null | undefined {
+    return this.#itemAnterior === undefined ? undefined : this.#itemAnterior ? { ...this.#itemAnterior } : null;
   }
 }

@@ -5,20 +5,14 @@ import type { UnitOfWork } from '../../shared/db/unit-of-work.js';
 import type { VentasEventMap } from './domain/eventos.js';
 import type { VentasRepository } from './ventas.repository.js';
 import type { CatalogoProductos, VerificadorClientes } from './domain/ports.js';
+import type { CarritoRepository } from './pos/carrito.repository.js';
 import { VentasService, type EstrategiasVentas } from './ventas.service.js';
 import { PosCheckoutFacade } from './pos/pos-checkout.facade.js';
 import type { CheckoutInput } from './pos/pos-checkout.facade.js';
 
-const pedidoItemSchema = z.object({
-  productoId: z.string().uuid(),
-  cantidad: z.coerce.number().int().positive(),
-});
-
 const crearPedidoSchema = z.object({
   documentoCliente: z.string().trim().min(1),
-  items: z.array(pedidoItemSchema).min(1),
-  descuento: z.coerce.number().nonnegative().optional(),
-  impuesto: z.coerce.number().nonnegative().optional(),
+  carritoId: z.string().uuid(),
 });
 
 const pagoSchema = z.object({
@@ -36,7 +30,7 @@ const facturaParamsSchema = z.object({
 
 const checkoutSchema = z.object({
   documentoCliente: z.string().trim().min(1),
-  items: z.array(pedidoItemSchema).min(1),
+  carritoId: z.string().uuid(),
   metodoPago: z.enum(['efectivo', 'pasarela']).optional(),
   montoRecibido: z.coerce.number().nonnegative().optional(),
 });
@@ -48,19 +42,20 @@ export interface VentasRoutesOptions {
   clientes: VerificadorClientes;
   estrategias: EstrategiasVentas;
   facade: PosCheckoutFacade;
+  carritoRepository: CarritoRepository;
 }
 
 export const ventasRoutes: FastifyPluginCallback<VentasRoutesOptions> = (
   app,
-  { repository, unitOfWork, catalogo, clientes, estrategias, facade },
+  { repository, unitOfWork, clientes, estrategias, facade, carritoRepository },
   done,
 ) => {
   const service = new VentasService(
     repository,
     unitOfWork,
-    catalogo,
     clientes,
     estrategias,
+    carritoRepository,
   );
 
   const checkoutFacade = facade;

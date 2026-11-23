@@ -7,11 +7,18 @@ export class QuitarItemCommand implements Comando {
   #carrito: Carrito;
   #productoId: string;
   #itemRemovido: ItemCarrito | undefined;
-  #ejecutado = false;
+  #ejecutado: boolean;
 
-  constructor(carrito: Carrito, productoId: string) {
+  constructor(
+    carrito: Carrito,
+    productoId: string,
+    itemRemovido?: ItemCarrito,
+    ejecutado?: boolean,
+  ) {
     this.#carrito = carrito;
     this.#productoId = productoId;
+    this.#itemRemovido = itemRemovido ? { ...itemRemovido } : undefined;
+    this.#ejecutado = ejecutado ?? itemRemovido !== undefined;
   }
 
   async ejecutar(): Promise<void> {
@@ -19,7 +26,8 @@ export class QuitarItemCommand implements Comando {
       return;
     }
 
-    this.#itemRemovido = this.#carrito.quitarItem(this.#productoId);
+    const removido = this.#carrito.quitarItem(this.#productoId);
+    this.#itemRemovido = removido ? { ...removido } : undefined;
     this.#ejecutado = true;
   }
 
@@ -28,12 +36,11 @@ export class QuitarItemCommand implements Comando {
       return;
     }
 
-    this.#carrito.agregarItem(
-      this.#itemRemovido.productoId,
-      this.#itemRemovido.cantidad,
-      this.#itemRemovido.precioUnitario,
-    );
-
+    this.#carrito.restaurarItem(this.#itemRemovido);
     this.#ejecutado = false;
+  }
+
+  obtenerItemRemovido(): ItemCarrito | undefined {
+    return this.#itemRemovido ? { ...this.#itemRemovido } : undefined;
   }
 }

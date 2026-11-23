@@ -1,19 +1,15 @@
-import { useEffect, useRef, useState, type FormEvent, type JSX } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type JSX } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-
-import { useCatalogo } from '../hooks/useCatalogo';
-import { obtenerJson, enviarJson } from '../lib/api';
-import { formatearMoneda, redondearMoneda } from '../lib/formato';
-import { claseStock } from '../lib/stock';
 import { FiDelete } from 'react-icons/fi';
-import type { Cliente, Pedido, Producto } from '../types';
+
+import { useCarrito } from '../hooks/useCarrito';
+import { useCatalogo } from '../hooks/useCatalogo';
+import { enviarJson, obtenerJson } from '../lib/api';
+import { formatearMoneda } from '../lib/formato';
+import { claseStock } from '../lib/stock';
+import type { Cliente, Pedido } from '../types';
 
 type MetodoPago = 'efectivo' | 'pasarela';
-
-interface LineaCarrito {
-  producto: Producto;
-  cantidad: number;
-}
 
 function etiquetaMetodoPago(metodo: MetodoPago): string {
   return metodo === 'efectivo' ? 'Efectivo' : 'Pasarela';
@@ -21,8 +17,16 @@ function etiquetaMetodoPago(metodo: MetodoPago): string {
 
 export function NuevaVenta(): JSX.Element {
   const navigate = useNavigate();
-  const { productos, stock, cargando, error: errorCatalogo, recargar } = useCatalogo();
-  const [lineas, setLineas] = useState<LineaCarrito[]>([]);
+  const { productos, stock, cargando: cargandoCatalogo, error: errorCatalogo, recargar } = useCatalogo();
+  const {
+    carritoId,
+    carrito,
+    cargando: cargandoCarrito,
+    error: errorCarrito,
+    despacharComando,
+    deshacer,
+  } = useCarrito();
+
   const [documentoCliente, setDocumentoCliente] = useState('');
   const [metodoPago, setMetodoPago] = useState<MetodoPago>('efectivo');
   const [procesando, setProcesando] = useState(false);
@@ -33,70 +37,18 @@ export function NuevaVenta(): JSX.Element {
   const [mostrarDropdown, setMostrarDropdown] = useState(false);
   const clienteInputRef = useRef<HTMLDivElement>(null);
 
+  const productosPorId = useMemo(() => {
+    return new Map(productos.map((producto) => [producto.id, producto]));
+  }, [productos]);
+
+  const items = carrito?.items ?? [];
+  const subtotal = carrito?.subtotal ?? 0;
+  const descuento = carrito?.descuento ?? 0;
+  const impuesto = carrito?.impuesto ?? 0;
+  const total = carrito?.total ?? 0;
+
   function cantidadEnCarrito(productoId: string): number {
-    return lineas.find((linea) => linea.producto.id === productoId)?.cantidad ?? 0;
-  }
-
-  function agregarProducto(producto: Producto): void {
-    const disponible = stock[producto.id] ?? 0;
-
-    setLineas((actuales) => {
-      const existente = actuales.find((linea) => linea.producto.id === producto.id);
-
-      if (existente) {
-        if (existente.cantidad >= disponible) {
-          return actuales;
-        }
-
-        return actuales.map((linea) =>
-          linea.producto.id === producto.id
-            ? { ...linea, cantidad: linea.cantidad + 1 }
-            : linea,
-        );
-      }
-
-      if (disponible <= 0) {
-        return actuales;
-      }
-
-      return [...actuales, { producto, cantidad: 1 }];
-    });
-  }
-
-  function incrementarCantidad(productoId: string): void {
-    const disponible = stock[productoId] ?? 0;
-
-    setLineas((actuales) =>
-      actuales.map((linea) => {
-        if (linea.producto.id !== productoId) {
-          return linea;
-        }
-
-        if (linea.cantidad >= disponible) {
-          return linea;
-        }
-
-        return { ...linea, cantidad: linea.cantidad + 1 };
-      }),
-    );
-  }
-
-  function decrementarCantidad(productoId: string): void {
-    setLineas((actuales) =>
-      actuales.map((linea) => {
-        if (linea.producto.id !== productoId) {
-          return linea;
-        }
-
-        return { ...linea, cantidad: Math.max(linea.cantidad - 1, 0) };
-      }),
-    );
-  }
-
-  function eliminarProducto(productoId: string): void {
-    setLineas((actuales) =>
-      actuales.filter((linea) => linea.producto.id !== productoId),
-    );
+    return items.find((item) => item.productoId === productoId)?.cantidad ?? 0;
   }
 
   useEffect(() => {
@@ -108,7 +60,6 @@ export function NuevaVenta(): JSX.Element {
 
       try {
         const clientesApi = await obtenerJson<Cliente[]>('/api/clientes');
-
         if (activo) {
           setClientes(clientesApi);
         }
@@ -158,21 +109,7 @@ export function NuevaVenta(): JSX.Element {
         cliente.documento.includes(documentoCliente.trim()),
       );
 
-  const cantidadTotal = lineas.reduce(
-    (acumulado, linea) => acumulado + linea.cantidad,
-    0,
-  );
-  const subtotal = redondearMoneda(
-    lineas.reduce(
-      (acumulado, linea) => acumulado + linea.producto.precio * linea.cantidad,
-      0,
-    ),
-  );
-  const descuento = redondearMoneda(
-    cantidadTotal > 10 ? subtotal * 0.1 : 0,
-  );
-  const impuesto = 0;
-  const total = redondearMoneda(subtotal - descuento + impuesto);
+  const errorVisible = error ?? errorCarrito;
 
   async function dejarEnPendiente(): Promise<void> {
     setError(null);
@@ -184,7 +121,7 @@ export function NuevaVenta(): JSX.Element {
       return;
     }
 
-    if (lineas.length === 0) {
+    if (!carritoId || items.length === 0) {
       setError('Agrega al menos un producto al carrito.');
       return;
     }
@@ -194,10 +131,7 @@ export function NuevaVenta(): JSX.Element {
     try {
       await enviarJson<Pedido>('/api/pedidos', 'POST', {
         documentoCliente: documentoNormalizado,
-        items: lineas.map((linea) => ({
-          productoId: linea.producto.id,
-          cantidad: linea.cantidad,
-        })),
+        carritoId,
       });
 
       void navigate('/ventas', {
@@ -226,7 +160,7 @@ export function NuevaVenta(): JSX.Element {
       return;
     }
 
-    if (lineas.length === 0) {
+    if (!carritoId || items.length === 0) {
       setError('Agrega al menos un producto al carrito.');
       return;
     }
@@ -240,10 +174,7 @@ export function NuevaVenta(): JSX.Element {
         pago: { metodo: string; monto: number; referencia: string };
       }>('/api/ventas/checkout', 'POST', {
         documentoCliente: documentoNormalizado,
-        items: lineas.map((linea) => ({
-          productoId: linea.producto.id,
-          cantidad: linea.cantidad,
-        })),
+        carritoId,
         metodoPago,
       });
 
@@ -268,6 +199,8 @@ export function NuevaVenta(): JSX.Element {
     setDocumentoCliente(cliente.documento);
     setMostrarDropdown(false);
   }
+
+  const controlesDeshabilitados = cargandoCarrito || procesando;
 
   return (
     <div className="pagina pos-pagina">
@@ -297,9 +230,9 @@ export function NuevaVenta(): JSX.Element {
         </div>
       </header>
 
-      {error ? (
+      {errorVisible ? (
         <p role="alert" className="alert alert-error">
-          {error}
+          {errorVisible}
         </p>
       ) : null}
 
@@ -315,9 +248,19 @@ export function NuevaVenta(): JSX.Element {
             <h3 id="carrito-titulo" className="seccion-titulo">
               Carrito
             </h3>
-            <span className="pos-contador">
-              {lineas.length} {lineas.length === 1 ? 'ítem' : 'ítems'}
-            </span>
+            <div className="pos-carrito-acciones">
+              <span className="pos-contador">
+                {items.length} {items.length === 1 ? 'ítem' : 'ítems'}
+              </span>
+              <button
+                type="button"
+                className="boton-secundario boton-compacto"
+                onClick={() => void deshacer()}
+                disabled={controlesDeshabilitados}
+              >
+                Deshacer
+              </button>
+            </div>
           </div>
 
           <div className="pos-cliente" ref={clienteInputRef}>
@@ -352,21 +295,21 @@ export function NuevaVenta(): JSX.Element {
               )}
           </div>
 
-          {lineas.length === 0 ? (
+          {items.length === 0 ? (
             <p className="app-empty">Agrega productos desde el catálogo.</p>
           ) : (
             <ul className="pos-carrito-lista">
-              {lineas.map((linea) => {
-                const disponible = stock[linea.producto.id] ?? 0;
+              {items.map((item) => {
+                const producto = productosPorId.get(item.productoId);
+                const nombre = producto?.nombre ?? item.productoId;
+                const disponible = stock[item.productoId] ?? 0;
 
                 return (
-                  <li key={linea.producto.id} className="pos-linea">
+                  <li key={item.productoId} className="pos-linea">
                     <div className="pos-linea-info">
-                      <span className="pos-linea-nombre">
-                        {linea.producto.nombre}
-                      </span>
+                      <span className="pos-linea-nombre">{nombre}</span>
                       <span className="pos-linea-precio">
-                        {formatearMoneda(linea.producto.precio)} c/u
+                        {formatearMoneda(item.precioUnitario)} c/u
                       </span>
                     </div>
 
@@ -374,55 +317,50 @@ export function NuevaVenta(): JSX.Element {
                       <button
                         type="button"
                         className="boton-icono boton-decrementar"
-                        aria-label={`Disminuir cantidad de ${linea.producto.nombre}`}
+                        aria-label={`Disminuir cantidad de ${nombre}`}
                         title="Disminuir"
-                        disabled={linea.cantidad <= 1}
-                        onClick={() => decrementarCantidad(linea.producto.id)}
+                        disabled={controlesDeshabilitados || item.cantidad <= 0}
+                        onClick={() =>
+                          void despacharComando('DECREMENTAR_ITEM', {
+                            productoId: item.productoId,
+                            cantidad: 1,
+                          })
+                        }
                       >
                         −
                       </button>
 
                       <input
-                        aria-label={`Cantidad de ${linea.producto.nombre}`}
+                        aria-label={`Cantidad de ${nombre}`}
                         className="pos-cantidad"
                         type="number"
                         min="0"
-                        value={linea.cantidad === 0 ? '' : linea.cantidad}
+                        value={item.cantidad}
+                        disabled={controlesDeshabilitados}
                         onChange={(event) => {
                           const valor = event.target.value;
-                          if (valor === '') {
-                            setLineas((actuales) =>
-                              actuales.map((l) =>
-                                l.producto.id === linea.producto.id
-                                  ? { ...l, cantidad: 0 }
-                                  : l,
-                              ),
-                            );
-                            return;
-                          }
-
+                          if (valor === '') return;
                           const numero = Number.parseInt(valor, 10);
-                          if (Number.isNaN(numero) || numero < 0) {
-                            return;
-                          }
-
-                          setLineas((actuales) =>
-                            actuales.map((l) =>
-                              l.producto.id === linea.producto.id
-                                ? { ...l, cantidad: Math.min(numero, Math.max(disponible, 0)) }
-                                : l,
-                            ),
-                          );
+                          if (Number.isNaN(numero) || numero < 0) return;
+                          void despacharComando('ESTABLECER_CANTIDAD', {
+                            productoId: item.productoId,
+                            cantidad: numero,
+                          });
                         }}
                       />
 
                       <button
                         type="button"
                         className="boton-icono boton-incrementar"
-                        aria-label={`Aumentar cantidad de ${linea.producto.nombre}`}
+                        aria-label={`Aumentar cantidad de ${nombre}`}
                         title="Aumentar"
-                        disabled={linea.cantidad >= disponible}
-                        onClick={() => incrementarCantidad(linea.producto.id)}
+                        disabled={controlesDeshabilitados || (disponible > 0 && item.cantidad >= disponible)}
+                        onClick={() =>
+                          void despacharComando('AGREGAR_ITEM', {
+                            productoId: item.productoId,
+                            cantidad: 1,
+                          })
+                        }
                       >
                         +
                       </button>
@@ -431,9 +369,14 @@ export function NuevaVenta(): JSX.Element {
                     <button
                       type="button"
                       className="boton-eliminar-icono"
-                      aria-label={`Eliminar ${linea.producto.nombre}`}
+                      aria-label={`Eliminar ${nombre}`}
                       title="Eliminar ítem"
-                      onClick={() => eliminarProducto(linea.producto.id)}
+                      disabled={controlesDeshabilitados}
+                      onClick={() =>
+                        void despacharComando('QUITAR_ITEM', {
+                          productoId: item.productoId,
+                        })
+                      }
                     >
                       <FiDelete size={16} />
                     </button>
@@ -472,9 +415,7 @@ export function NuevaVenta(): JSX.Element {
             <select
               id="pos-metodo-pago"
               value={metodoPago}
-              onChange={(event) =>
-                setMetodoPago(event.target.value as MetodoPago)
-              }
+              onChange={(event) => setMetodoPago(event.target.value as MetodoPago)}
             >
               <option value="efectivo">Efectivo</option>
               <option value="pasarela">Pasarela</option>
@@ -489,7 +430,7 @@ export function NuevaVenta(): JSX.Element {
             <button
               type="submit"
               className="boton-procesar"
-              disabled={procesando || lineas.length === 0}
+              disabled={procesando || cargandoCarrito || items.length === 0}
             >
               {procesando ? 'Procesando…' : 'Procesar pago'}
             </button>
@@ -498,7 +439,7 @@ export function NuevaVenta(): JSX.Element {
               type="button"
               className="boton-secundario boton-compacto"
               onClick={() => void dejarEnPendiente()}
-              disabled={procesando || lineas.length === 0}
+              disabled={procesando || cargandoCarrito || items.length === 0}
             >
               {procesando ? 'Procesando…' : 'Dejar en pendiente'}
             </button>
@@ -514,9 +455,9 @@ export function NuevaVenta(): JSX.Element {
               type="button"
               className="boton-secundario boton-compacto"
               onClick={recargar}
-              disabled={cargando}
+              disabled={cargandoCatalogo}
             >
-              {cargando ? 'Actualizando…' : 'Actualizar'}
+              {cargandoCatalogo ? 'Actualizando…' : 'Actualizar'}
             </button>
           </div>
 
@@ -526,7 +467,7 @@ export function NuevaVenta(): JSX.Element {
             </p>
           ) : null}
 
-          {cargando ? (
+          {cargandoCatalogo ? (
             <p className="app-empty">Cargando productos…</p>
           ) : productos.length === 0 ? (
             <p className="app-empty">No hay productos registrados.</p>
@@ -554,7 +495,7 @@ export function NuevaVenta(): JSX.Element {
                         <td>
                           <span
                             className={`stock-badge ${claseStock(disponible)}`}
-                          title={`Stock: ${disponible}`}
+                            title={`Stock: ${disponible}`}
                           >
                             {disponible}
                           </span>
@@ -563,8 +504,13 @@ export function NuevaVenta(): JSX.Element {
                           <button
                             type="button"
                             className="boton-agregar"
-                            onClick={() => agregarProducto(producto)}
-                            disabled={sinDisponibilidad}
+                            disabled={controlesDeshabilitados || sinDisponibilidad}
+                            onClick={() =>
+                              void despacharComando('AGREGAR_ITEM', {
+                                productoId: producto.id,
+                                cantidad: 1,
+                              })
+                            }
                           >
                             Agregar
                           </button>

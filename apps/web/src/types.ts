@@ -42,3 +42,19 @@ export interface Pedido {
   createdAt?: string;
   items?: PedidoItem[];
 }
+
+export interface ItemCarrito {
+  productoId: string;
+  cantidad: number;
+  precioUnitario: number;
+}
+
+export interface Carrito {
+  id: string;
+  estado: 'Abierto' | 'Cerrado' | 'Descartado';
+  items: ItemCarrito[];
+  subtotal: number;
+  descuento: number;
+  impuesto: number;
+  total: number;
+}

@@ -10,24 +10,16 @@ import { Factura } from './domain/factura.js';
 import { Pedido, type PedidoItem } from './domain/pedido.js';
 import type { PedidoDetalle } from './domain/pedido-detalle.js';
 import type { EstadoPedido } from './domain/pedido-estado.js';
-import { DescuentoPromocion } from './domain/pricing/descuento-promocion.strategy.js';
 import type { DescuentoStrategy } from './domain/pricing/descuento.strategy.js';
-import { ImpuestoFijo } from './domain/pricing/impuesto-fijo.strategy.js';
 import type { ImpuestoStrategy } from './domain/pricing/impuesto.strategy.js';
 import type { PagoContexto, PagoStrategy } from './domain/payments/pago.strategy.js';
-import type { CatalogoProductos, VerificadorClientes } from './domain/ports.js';
+import type { VerificadorClientes } from './domain/ports.js';
+import type { CarritoRepository } from './pos/carrito.repository.js';
 import type { VentasRepository } from './ventas.repository.js';
-
-export interface CrearPedidoItemInput {
-  productoId: string;
-  cantidad: number;
-}
 
 export interface CrearPedidoInput {
   documentoCliente: string;
-  items: CrearPedidoItemInput[];
-  descuento?: number;
-  impuesto?: number;
+  carritoId: string;
 }
 
 export interface EstrategiasVentas {
@@ -47,22 +39,22 @@ type VentasTransaction = UnitOfWorkContext<VentasEventMap>['db'];
 export class VentasService {
   readonly #repository: VentasRepository;
   readonly #unitOfWork: UnitOfWork<VentasEventMap>;
-  readonly #catalogo: CatalogoProductos;
   readonly #clientes: VerificadorClientes;
   readonly #estrategias: EstrategiasVentas;
+  readonly #carritoRepository: CarritoRepository;
 
   constructor(
     repository: VentasRepository,
     unitOfWork: UnitOfWork<VentasEventMap>,
-    catalogo: CatalogoProductos,
     clientes: VerificadorClientes,
     estrategias: EstrategiasVentas,
+    carritoRepository: CarritoRepository,
   ) {
     this.#repository = repository;
     this.#unitOfWork = unitOfWork;
-    this.#catalogo = catalogo;
     this.#clientes = clientes;
     this.#estrategias = estrategias;
+    this.#carritoRepository = carritoRepository;
   }
 
   async crearPedido(data: CrearPedidoInput): Promise<Pedido> {
@@ -72,43 +64,30 @@ export class VentasService {
       throw new RecursoNoEncontrado('CLIENTE_NO_ENCONTRADO', 'Cliente no encontrado');
     }
 
-    const productosVistos = new Set<string>();
-    const items: PedidoItem[] = [];
+    const carrito = await this.#carritoRepository.obtenerCarrito(this.#unitOfWork.db, data.carritoId);
+    if (!carrito) {
+      throw new RecursoNoEncontrado('CARRITO_NO_ENCONTRADO', 'Carrito no encontrado');
+    }
 
-    for (const item of data.items) {
-      if (productosVistos.has(item.productoId)) {
-        throw new DomainError('No se puede repetir un producto en el pedido', {
-          code: 'ITEM_DUPLICADO',
-          statusCode: 400,
-        });
-      }
-
-      productosVistos.add(item.productoId);
-
-      const precioUnitario = await this.#catalogo.obtenerPrecio(item.productoId);
-
-      if (precioUnitario === null) {
-        throw new RecursoNoEncontrado(
-          'PRODUCTO_NO_ENCONTRADO',
-          `Producto ${item.productoId} no encontrado`,
-        );
-      }
-
-      items.push({
-        productoId: item.productoId,
-        cantidad: item.cantidad,
-        precioUnitario,
+    if (carrito.estado !== 'Abierto') {
+      throw new DomainError('El carrito no está abierto', {
+        code: 'CARRITO_NO_ABIERTO',
+        statusCode: 409,
       });
     }
 
-    const descuentoStrategy =
-      data.descuento === undefined
-        ? this.#estrategias.descuento
-        : new DescuentoPromocion({ montoFijo: data.descuento });
-    const impuestoStrategy =
-      data.impuesto === undefined
-        ? this.#estrategias.impuesto
-        : new ImpuestoFijo(data.impuesto);
+    if (carrito.items.length === 0) {
+      throw new DomainError('El carrito está vacío', {
+        code: 'CARRITO_VACIO',
+        statusCode: 400,
+      });
+    }
+
+    const items: PedidoItem[] = carrito.items.map((item) => ({
+      productoId: item.productoId,
+      cantidad: item.cantidad,
+      precioUnitario: item.precioUnitario,
+    }));
 
     const pedido = Pedido.crear(
       {
@@ -117,12 +96,13 @@ export class VentasService {
         estado: 'Borrador',
         items,
       },
-      { descuento: descuentoStrategy, impuesto: impuestoStrategy },
+      { descuento: this.#estrategias.descuento, impuesto: this.#estrategias.impuesto },
       { esClienteFrecuente: cliente.esClienteFrecuente ?? false },
     );
 
     await this.#unitOfWork.execute(async ({ db }) => {
       await this.#repository.crearPedido(db, pedido);
+      await this.#carritoRepository.actualizarEstado(db, data.carritoId, 'Cerrado');
     });
 
     return pedido;

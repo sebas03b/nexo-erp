@@ -102,14 +102,36 @@ function instalarFetch(
   } = {},
 ): ReturnType<typeof vi.fn> {
   let pedidoEliminado = false;
+
+  type ItemCarritoMock = { productoId: string; cantidad: number; precioUnitario: number };
+  type CarritoMock = {
+    id: string;
+    estado: 'Abierto' | 'Cerrado' | 'Descartado';
+    items: ItemCarritoMock[];
+    subtotal: number;
+    descuento: number;
+    impuesto: number;
+    total: number;
+  };
+
+  let carritoActual: CarritoMock | null = null;
+  const historial: Array<{ tipo: string; payload: Record<string, unknown>; anterior: ItemCarritoMock | null; removido: ItemCarritoMock | null }> = [];
+
+  function recalcular(carrito: CarritoMock): CarritoMock {
+    const subtotal = carrito.items.reduce((acc, i) => acc + i.cantidad * i.precioUnitario, 0);
+    const cantidadTotal = carrito.items.reduce((acc, i) => acc + i.cantidad, 0);
+    const descuento = cantidadTotal >= 11 ? Math.round(subtotal * 0.1 * 100) / 100 : 0;
+    const impuesto = 0;
+    const total = Math.round((subtotal - descuento + impuesto) * 100) / 100;
+    return { ...carrito, subtotal, descuento, impuesto, total };
+  }
+
   const fetchMock = vi.fn(
     (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const url = urlDe(input);
 
       if (url === '/api/clientes') {
-        return Promise.resolve(
-          respuestaJson(opciones.clientes ?? CLIENTES_POR_DEFECTO),
-        );
+        return Promise.resolve(respuestaJson(opciones.clientes ?? CLIENTES_POR_DEFECTO));
       }
 
       if (url === '/api/productos') {
@@ -117,73 +139,115 @@ function instalarFetch(
       }
 
       if (url === `/api/productos/${PRODUCTO_ID}` && init?.method === 'PUT') {
-        return Promise.resolve(
-          respuestaJson({
-            ...producto,
-            nombre: 'Café actualizado',
-            precio: 250,
-          }),
-        );
+        return Promise.resolve(respuestaJson({ ...producto, nombre: 'Café actualizado', precio: 250 }));
       }
 
       if (url === `/api/productos/${PRODUCTO_ID}` && init?.method === 'DELETE') {
         if (opciones.errorEliminarProducto) {
           return Promise.resolve(
-            respuestaJson(
-              {
-                error: {
-                  message:
-                    'El producto está referenciado por otros registros',
-                },
-              },
-              409,
-            ),
+            respuestaJson({ error: { message: 'El producto está referenciado por otros registros' } }, 409),
           );
         }
-
         return Promise.resolve(respuestaJson({}, 204));
       }
 
       if (url === '/api/stock') {
         return Promise.resolve(
-          respuestaJson([
-            {
-              productoId: producto.id,
-              cantidad: opciones.stockCantidad ?? 4,
-            },
-          ]),
+          respuestaJson([{ productoId: producto.id, cantidad: opciones.stockCantidad ?? 4 }]),
         );
       }
 
       if (url === `/api/stock/${PRODUCTO_ID}` && init?.method === 'PUT') {
-        return Promise.resolve(
-          respuestaJson({ productoId: PRODUCTO_ID, cantidad: 7 }),
-        );
+        return Promise.resolve(respuestaJson({ productoId: PRODUCTO_ID, cantidad: 7 }));
+      }
+
+      if (url === '/api/carritos' && init?.method === 'POST') {
+        carritoActual = recalcular({
+          id: '44444444-4444-4444-8444-444444444444',
+          estado: 'Abierto',
+          items: [],
+          subtotal: 0, descuento: 0, impuesto: 0, total: 0,
+        });
+        historial.length = 0;
+        return Promise.resolve(respuestaJson(carritoActual, 201));
+      }
+
+      if (carritoActual && url === `/api/carritos/${carritoActual.id}` && (!init?.method || init?.method === 'GET')) {
+        return Promise.resolve(respuestaJson(carritoActual));
+      }
+
+      if (carritoActual && url === `/api/carritos/${carritoActual.id}/comandos` && init?.method === 'POST') {
+        const body = init?.body ? JSON.parse(init.body as string) as { accion: string; payload: Record<string, unknown> } : null;
+        if (!body) return Promise.resolve(respuestaJson({ error: { message: 'Datos inválidos' } }, 400));
+        const { accion, payload } = body;
+        const productoId = String(payload.productoId);
+        const cantidad = Number(payload.cantidad ?? 0);
+        const existente = carritoActual.items.find((i) => i.productoId === productoId) ?? null;
+        const anterior = existente ? { ...existente } : null;
+
+        if (accion === 'AGREGAR_ITEM') {
+          if (existente) existente.cantidad += cantidad;
+          else carritoActual.items.push({ productoId, cantidad, precioUnitario: producto.precio });
+          historial.push({ tipo: accion, payload, anterior, removido: null });
+        } else if (accion === 'DECREMENTAR_ITEM') {
+          if (existente) {
+            existente.cantidad -= cantidad;
+            if (existente.cantidad <= 0) carritoActual.items = carritoActual.items.filter((i) => i.productoId !== productoId);
+          }
+          historial.push({ tipo: accion, payload, anterior, removido: null });
+        } else if (accion === 'QUITAR_ITEM') {
+          carritoActual.items = carritoActual.items.filter((i) => i.productoId !== productoId);
+          historial.push({ tipo: accion, payload, anterior: null, removido: anterior });
+        } else if (accion === 'ESTABLECER_CANTIDAD') {
+          if (existente) {
+            if (cantidad <= 0) carritoActual.items = carritoActual.items.filter((i) => i.productoId !== productoId);
+            else existente.cantidad = cantidad;
+          }
+          historial.push({ tipo: accion, payload, anterior, removido: null });
+        }
+
+        carritoActual = recalcular(carritoActual);
+        return Promise.resolve(respuestaJson(carritoActual));
+      }
+
+      if (carritoActual && url === `/api/carritos/${carritoActual.id}/deshacer` && init?.method === 'POST') {
+        const ultimo = historial.pop();
+        if (ultimo) {
+          if (ultimo.tipo === 'AGREGAR_ITEM') {
+            if (ultimo.anterior) {
+              const item = carritoActual.items.find((i) => i.productoId === ultimo.anterior!.productoId);
+              if (item) item.cantidad = ultimo.anterior.cantidad;
+            } else {
+              carritoActual.items = carritoActual.items.filter((i) => i.productoId !== String(ultimo.payload.productoId));
+            }
+          } else if (ultimo.tipo === 'DECREMENTAR_ITEM' || ultimo.tipo === 'ESTABLECER_CANTIDAD') {
+            if (ultimo.anterior) {
+              const idx = carritoActual.items.findIndex((i) => i.productoId === ultimo.anterior!.productoId);
+              if (idx >= 0) carritoActual.items[idx] = { ...ultimo.anterior };
+              else carritoActual.items.push({ ...ultimo.anterior });
+            }
+          } else if (ultimo.tipo === 'QUITAR_ITEM') {
+            if (ultimo.removido) carritoActual.items.push({ ...ultimo.removido });
+          }
+        }
+        carritoActual = recalcular(carritoActual);
+        return Promise.resolve(respuestaJson(carritoActual));
       }
 
       if (url === '/api/pedidos' && init?.method === 'POST') {
+        const body = init?.body ? JSON.parse(init.body as string) : null;
         return Promise.resolve(
-          respuestaJson({ ...pedidoPagado, estado: 'Borrador', total: 100 }, 201),
+          respuestaJson({ ...pedidoPagado, estado: 'Borrador', total: carritoActual?.total ?? 100, carritoId: body?.carritoId }, 201),
         );
       }
 
       if (url === `/api/pedidos/${PEDIDO_ID}` && init?.method === 'DELETE') {
         if (opciones.errorEliminarPedido) {
           return Promise.resolve(
-            respuestaJson(
-              {
-                error: {
-                  message:
-                    'El pedido tiene una factura asociada y no se puede eliminar',
-                },
-              },
-              409,
-            ),
+            respuestaJson({ error: { message: 'El pedido tiene una factura asociada y no se puede eliminar' } }, 409),
           );
         }
-
         pedidoEliminado = true;
-
         return Promise.resolve(respuestaJson({}, 204));
       }
 
@@ -192,55 +256,25 @@ function instalarFetch(
       }
 
       if (url === '/api/pedidos') {
-        if (pedidoEliminado) {
-          return Promise.resolve(respuestaJson([]));
-        }
-
-        return Promise.resolve(
-          respuestaJson([
-            opciones.pedidosConItems
-              ? pedidoPagado
-              : { ...pedidoPagado, items: undefined },
-          ]),
-        );
+        if (pedidoEliminado) return Promise.resolve(respuestaJson([]));
+        return Promise.resolve(respuestaJson([opciones.pedidosConItems ? pedidoPagado : { ...pedidoPagado, items: undefined }]));
       }
 
       if (url === `/api/pedidos/${PEDIDO_ID}/emitir` && init?.method === 'POST') {
-        return Promise.resolve(
-          respuestaJson({ ...pedidoPagado, estado: 'Emitido', total: 100 }),
-        );
+        return Promise.resolve(respuestaJson({ ...pedidoPagado, estado: 'Emitido', total: 100 }));
       }
 
       if (url === `/api/pedidos/${PEDIDO_ID}/pagar` && init?.method === 'POST') {
-        return Promise.resolve(
-          respuestaJson({ ...pedidoPagado, estado: 'Pagado', total: 100 }),
-        );
+        return Promise.resolve(respuestaJson({ ...pedidoPagado, estado: 'Pagado', total: 100 }));
       }
 
-      if (
-        url === '/api/ventas/checkout' &&
-        init?.method === 'POST'
-      ) {
+      if (url === '/api/ventas/checkout' && init?.method === 'POST') {
         const body = init?.body ? JSON.parse(init.body as string) : null;
         return Promise.resolve(
           respuestaJson({
-            pedido: {
-              ...pedidoPagado,
-              id: PEDIDO_ID,
-              estado: 'Pagado',
-              total: 100,
-              documentoCliente: body?.documentoCliente,
-            },
-            factura: {
-              id: 'factura-1',
-              numero: 'FAC-000001',
-              estado: 'Emitida',
-            },
-            pago: {
-              metodo: body?.metodoPago ?? 'efectivo',
-              monto: 100,
-              referencia: 'PAGO-1',
-            },
+            pedido: { ...pedidoPagado, id: PEDIDO_ID, estado: 'Pagado', total: carritoActual?.total ?? 100 },
+            factura: { id: 'factura-1', numero: 'FAC-000001', estado: 'Emitida' },
+            pago: { metodo: body?.metodoPago ?? 'efectivo', monto: carritoActual?.total ?? 100, referencia: 'PAGO-1' },
           }),
         );
       }
@@ -387,22 +421,25 @@ describe('App', () => {
 
     fireEvent.click(within(catalogo).getByRole('button', { name: 'Agregar' }));
 
-    const cantidad = within(carrito).getByLabelText('Cantidad de Café de prueba');
-    expect(cantidad).toHaveValue(1);
+    const cantidad = await within(carrito).findByLabelText('Cantidad de Café de prueba');
+    await waitFor(() => expect(cantidad).toHaveValue(1));
 
-    const totalVenta = carrito.querySelector('.pos-total dd');
-    expect(totalVenta).toHaveTextContent('100');
+    const totalVenta = () => carrito.querySelector('.pos-total dd');
+    expect(totalVenta()).toHaveTextContent('100');
 
-    fireEvent.change(cantidad, { target: { value: '2' } });
+    fireEvent.change(within(carrito).getByLabelText('Cantidad de Café de prueba'), {
+      target: { value: '2' },
+    });
 
-    expect(cantidad).toHaveValue(2);
-    expect(totalVenta).toHaveTextContent('200');
+    await waitFor(() => expect(totalVenta()).toHaveTextContent('200'));
 
     fireEvent.click(
       within(carrito).getByRole('button', { name: 'Eliminar Café de prueba' }),
     );
 
-    expect(within(carrito).queryByText('Café de prueba')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(carrito).queryByText('Café de prueba')).not.toBeInTheDocument(),
+    );
     expect(within(carrito).getByText('Agrega productos desde el catálogo.')).toBeInTheDocument();
   });
 
@@ -416,22 +453,26 @@ describe('App', () => {
 
     fireEvent.click(within(catalogo).getByRole('button', { name: 'Agregar' }));
 
-    const cantidad = within(carrito).getByLabelText('Cantidad de Café de prueba');
+    await within(carrito).findByLabelText('Cantidad de Café de prueba');
     const descuento = within(carrito).getByText('Descuento');
-    const totalVenta = carrito.querySelector('.pos-total dd');
+    const totalVenta = () => carrito.querySelector('.pos-total dd');
 
-    fireEvent.change(cantidad, { target: { value: '10' } });
+    fireEvent.change(within(carrito).getByLabelText('Cantidad de Café de prueba'), {
+      target: { value: '10' },
+    });
 
-    expect(descuento.nextElementSibling).toHaveTextContent('0');
-    expect(totalVenta).toHaveTextContent('1.000');
+    await waitFor(() => expect(descuento.nextElementSibling).toHaveTextContent('0'));
+    expect(totalVenta()).toHaveTextContent('1.000');
 
-    fireEvent.change(cantidad, { target: { value: '11' } });
+    fireEvent.change(within(carrito).getByLabelText('Cantidad de Café de prueba'), {
+      target: { value: '11' },
+    });
 
-    expect(descuento.nextElementSibling).toHaveTextContent('110');
-    expect(totalVenta).toHaveTextContent('990');
+    await waitFor(() => expect(descuento.nextElementSibling).toHaveTextContent('110'));
+    expect(totalVenta()).toHaveTextContent('990');
   });
 
-  it('procesa la venta con el flujo crear, emitir y pagar usando los UUID correctos', async () => {
+  it('procesa la venta con el flujo checkout usando el carritoId del backend', async () => {
     const fetchMock = instalarFetch();
 
     await abrirNuevaVenta();
@@ -440,9 +481,15 @@ describe('App', () => {
     const carrito = screen.getByRole('region', { name: 'Carrito' });
 
     fireEvent.click(within(catalogo).getByRole('button', { name: 'Agregar' }));
+    await within(carrito).findByLabelText('Cantidad de Café de prueba');
+
     fireEvent.change(within(carrito).getByLabelText('Cantidad de Café de prueba'), {
       target: { value: '2' },
     });
+    await waitFor(() =>
+      expect(carrito.querySelector('.pos-total dd')).toHaveTextContent('200'),
+    );
+
     fireEvent.change(screen.getByLabelText('Documento del cliente'), {
       target: { value: '  CC-123456  ' },
     });
@@ -463,10 +510,58 @@ describe('App', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         documentoCliente: 'CC-123456',
-        items: [{ productoId: PRODUCTO_ID, cantidad: 2 }],
+        carritoId: '44444444-4444-4444-8444-444444444444',
         metodoPago: 'pasarela',
       }),
     });
+  });
+
+  it('despacha comandos +, −, input, papelera y deshacer al backend', async () => {
+    const fetchMock = instalarFetch();
+
+    await abrirNuevaVenta();
+
+    const catalogo = screen.getByRole('region', { name: 'Catálogo' });
+    const carrito = screen.getByRole('region', { name: 'Carrito' });
+
+    fireEvent.click(within(catalogo).getByRole('button', { name: 'Agregar' }));
+    await within(carrito).findByLabelText('Cantidad de Café de prueba');
+
+    fireEvent.click(within(carrito).getByRole('button', { name: 'Aumentar cantidad de Café de prueba' }));
+    await waitFor(() =>
+      expect(within(carrito).getByLabelText('Cantidad de Café de prueba')).toHaveValue(2),
+    );
+
+    fireEvent.click(within(carrito).getByRole('button', { name: 'Disminuir cantidad de Café de prueba' }));
+    await waitFor(() =>
+      expect(within(carrito).getByLabelText('Cantidad de Café de prueba')).toHaveValue(1),
+    );
+
+    fireEvent.change(within(carrito).getByLabelText('Cantidad de Café de prueba'), {
+      target: { value: '3' },
+    });
+    await waitFor(() =>
+      expect(within(carrito).getByLabelText('Cantidad de Café de prueba')).toHaveValue(3),
+    );
+
+    fireEvent.click(within(carrito).getByRole('button', { name: 'Deshacer' }));
+    await waitFor(() =>
+      expect(within(carrito).getByLabelText('Cantidad de Café de prueba')).toHaveValue(1),
+    );
+
+    fireEvent.click(within(carrito).getByRole('button', { name: 'Eliminar Café de prueba' }));
+    await waitFor(() =>
+      expect(within(carrito).queryByText('Café de prueba')).not.toBeInTheDocument(),
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/carritos/44444444-4444-4444-8444-444444444444/comandos',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/carritos/44444444-4444-4444-8444-444444444444/deshacer',
+      expect.objectContaining({ method: 'POST' }),
+    );
   });
 
   it('no procesa la venta sin documento del cliente', async () => {
@@ -475,8 +570,11 @@ describe('App', () => {
     await abrirNuevaVenta();
 
     const catalogo = screen.getByRole('region', { name: 'Catálogo' });
+    const carrito = screen.getByRole('region', { name: 'Carrito' });
 
     fireEvent.click(within(catalogo).getByRole('button', { name: 'Agregar' }));
+    await within(carrito).findByLabelText('Cantidad de Café de prueba');
+
     fireEvent.click(screen.getByRole('button', { name: 'Procesar pago' }));
 
     expect(

@@ -17,6 +17,9 @@ import { ImpuestoExento } from './modules/ventas/domain/pricing/impuesto-exento.
 import { CadenaValidacion } from './modules/ventas/domain/validation/cadena-validacion.js';
 import { ValidarClienteValido } from './modules/ventas/domain/validation/cadena-validacion.js';
 import { ValidarStockSuficiente } from './modules/ventas/domain/validation/cadena-validacion.js';
+import { CarritoRepository } from './modules/ventas/pos/carrito.repository.js';
+import { carritoRoutes } from './modules/ventas/pos/carrito.routes.js';
+import { CarritoService } from './modules/ventas/pos/carrito.service.js';
 import { PosCheckoutFacade } from './modules/ventas/pos/pos-checkout.facade.js';
 import { VentasRepository } from './modules/ventas/ventas.repository.js';
 import { ventasRoutes } from './modules/ventas/ventas.routes.js';
@@ -133,23 +136,26 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   const cadenaValidacion = new CadenaValidacion();
   cadenaValidacion.agregar(new ValidarClienteValido());
-  cadenaValidacion.agregar(
-    new ValidarStockSuficiente(),
+  cadenaValidacion.agregar(new ValidarStockSuficiente());
+
+  const ventasRepository = new VentasRepository(db);
+  const carritoRepository = new CarritoRepository(db);
+  const carritoService = new CarritoService(
+    db,
+    carritoRepository,
+    estrategiasVentas,
   );
 
   const posCheckoutFacade = new PosCheckoutFacade(
     cadenaValidacion,
     estrategiasVentas,
-    catalogo,
     clientes,
-    new VentasRepository(db),
+    ventasRepository,
+    carritoRepository,
     unitOfWork,
     async (productoId: string, cantidad: number) => {
       const stock = await inventarioRepository.obtenerStock(productoId);
       return stock !== undefined && stock.cantidad >= cantidad;
-    },
-    async (productoId: string, cantidad: number) => {
-      await inventarioRepository.decrementarStock(productoId, cantidad);
     },
   );
 
@@ -157,13 +163,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(clientesRoutes, {
     repository: new ClientesRepository(db),
   });
+  await app.register(carritoRoutes, { service: carritoService });
   await app.register(ventasRoutes, {
-    repository: new VentasRepository(db),
+    repository: ventasRepository,
     unitOfWork,
     catalogo,
     clientes,
     estrategias: estrategiasVentas,
     facade: posCheckoutFacade,
+    carritoRepository,
   });
 
   if (ownsDb) {

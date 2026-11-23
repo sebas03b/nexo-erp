@@ -3,28 +3,21 @@
 import { randomUUID } from 'node:crypto';
 
 import type { UnitOfWork } from '../../../shared/db/unit-of-work.js';
-import { DomainError } from '../../../shared/errors/domain-error.js';
+import { DomainError, RecursoNoEncontrado } from '../../../shared/errors/domain-error.js';
 import type { VentasEventMap } from '../domain/eventos.js';
 import { FacturaBuilder } from '../domain/factura.builder.js';
 import { Factura } from '../domain/factura.js';
 import { Pedido, type PedidoItem } from '../domain/pedido.js';
-import type {
-  CatalogoProductos,
-  VerificadorClientes,
-} from '../domain/ports.js';
+import type { VerificadorClientes } from '../domain/ports.js';
 import type { ResultadoPago } from '../domain/payments/pago.strategy.js';
 import type { CadenaValidacion } from '../domain/validation/cadena-validacion.js';
 import type { VentasRepository } from '../ventas.repository.js';
 import type { EstrategiasVentas, MetodoPago } from '../ventas.service.js';
-
-export interface CheckoutItemInput {
-  readonly productoId: string;
-  readonly cantidad: number;
-}
+import type { CarritoRepository } from './carrito.repository.js';
 
 export interface CheckoutInput {
   readonly documentoCliente: string;
-  readonly items: readonly CheckoutItemInput[];
+  readonly carritoId: string;
   readonly metodoPago?: MetodoPago;
   readonly montoRecibido?: number;
 }
@@ -39,62 +32,102 @@ export class PosCheckoutFacade {
   constructor(
     private readonly cadenaValidacion: CadenaValidacion,
     private readonly estrategias: EstrategiasVentas,
-    private readonly catalogo: CatalogoProductos,
     private readonly clientes: VerificadorClientes,
     private readonly repository: VentasRepository,
+    private readonly carritoRepository: CarritoRepository,
     private readonly unitOfWork: UnitOfWork<VentasEventMap>,
     private readonly verificarStock: (
       productoId: string,
       cantidad: number,
     ) => Promise<boolean>,
-    private readonly descontarStock: (
-      productoId: string,
-      cantidad: number,
-    ) => Promise<void>,
   ) {}
 
   async checkout(input: CheckoutInput): Promise<CheckoutResultado> {
-    // 1. Validación por cadena de responsabilidad (fuera de la transacción
-    //    para fallar rápido sin tocar la base de datos).
+    const carrito = await this.carritoRepository.obtenerCarrito(
+      this.unitOfWork.db,
+      input.carritoId,
+    );
+
+    if (!carrito) {
+      throw new RecursoNoEncontrado('CARRITO_NO_ENCONTRADO', 'Carrito no encontrado');
+    }
+
+    if (carrito.estado !== 'Abierto') {
+      throw new DomainError('El carrito no está abierto', {
+        code: 'CARRITO_NO_ABIERTO',
+        statusCode: 409,
+      });
+    }
+
+    if (carrito.items.length === 0) {
+      throw new DomainError('El carrito está vacío', {
+        code: 'CARRITO_VACIO',
+        statusCode: 400,
+      });
+    }
+
     await this.cadenaValidacion.ejecutar({
       documentoCliente: input.documentoCliente,
-      items: input.items,
-      verificarCliente: (documento) =>
-        this.clientes.obtenerPorDocumento(documento),
+      items: carrito.items.map((item) => ({
+        productoId: item.productoId,
+        cantidad: item.cantidad,
+      })),
+      verificarCliente: (documento) => this.clientes.obtenerPorDocumento(documento),
       verificarStock: this.verificarStock,
     });
 
-    // 2. Todo el proceso de checkout corre en una única transacción.
     return this.unitOfWork.execute(async (context) => {
-      // 2a. Obtener precios y construir ítems del pedido.
+      const carritoTx = await this.carritoRepository.obtenerCarrito(
+        context.db,
+        input.carritoId,
+      );
+
+      if (!carritoTx) {
+        throw new RecursoNoEncontrado('CARRITO_NO_ENCONTRADO', 'Carrito no encontrado');
+      }
+
+      if (carritoTx.estado !== 'Abierto') {
+        throw new DomainError('El carrito no está abierto', {
+          code: 'CARRITO_NO_ABIERTO',
+          statusCode: 409,
+        });
+      }
+
+      if (carritoTx.items.length === 0) {
+        throw new DomainError('El carrito está vacío', {
+          code: 'CARRITO_VACIO',
+          statusCode: 400,
+        });
+      }
+
       const items: PedidoItem[] = [];
 
-      for (const itemInput of input.items) {
-        const precioUnitario = await this.catalogo.obtenerPrecio(
-          itemInput.productoId,
-        );
+      for (const itemInput of carritoTx.items) {
+        const productoRow = await context.db
+          .selectFrom('productos')
+          .select('precio')
+          .where('id', '=', itemInput.productoId)
+          .executeTakeFirst();
 
-        if (precioUnitario === null) {
-          throw new DomainError(
-            `Producto ${itemInput.productoId} no encontrado`,
-            {
-              code: 'PRODUCTO_NO_ENCONTRADO',
-              statusCode: 404,
-            },
-          );
+        if (!productoRow) {
+          throw new DomainError(`Producto ${itemInput.productoId} no encontrado`, {
+            code: 'PRODUCTO_NO_ENCONTRADO',
+            statusCode: 404,
+          });
         }
 
         items.push({
           productoId: itemInput.productoId,
           cantidad: itemInput.cantidad,
-          precioUnitario,
+          precioUnitario: Number(productoRow.precio),
         });
       }
 
-      // 2b. Verificar cliente y obtener si es frecuente.
-      const cliente = await this.clientes.obtenerPorDocumento(
-        input.documentoCliente.trim(),
-      );
+      const cliente = await context.db
+        .selectFrom('clientes')
+        .select('id')
+        .where('documento', '=', input.documentoCliente.trim())
+        .executeTakeFirst();
 
       if (!cliente) {
         throw new DomainError('Cliente no encontrado', {
@@ -103,7 +136,6 @@ export class PosCheckoutFacade {
         });
       }
 
-      // 2c. Calcular totales usando las estrategias de descuento e impuesto.
       const pedido = Pedido.crear(
         {
           id: randomUUID(),
@@ -116,14 +148,12 @@ export class PosCheckoutFacade {
           impuesto: this.estrategias.impuesto,
         },
         {
-          esClienteFrecuente: cliente.esClienteFrecuente ?? false,
+          esClienteFrecuente: false,
         },
       );
 
-      // 2d. Persistir pedido en Borrador.
       await this.repository.crearPedido(context.db, pedido);
 
-      // 2e. Emitir el pedido (Borrador → Emitido).
       pedido.emitir();
 
       const emitido = await this.repository.actualizarEstado(
@@ -134,16 +164,12 @@ export class PosCheckoutFacade {
       );
 
       if (!emitido) {
-        throw new DomainError(
-          'El pedido cambió de estado antes de emitirlo',
-          {
-            code: 'CONFLICTO_ESTADO_PEDIDO',
-            statusCode: 409,
-          },
-        );
+        throw new DomainError('El pedido cambió de estado antes de emitirlo', {
+          code: 'CONFLICTO_ESTADO_PEDIDO',
+          statusCode: 409,
+        });
       }
 
-      // 2f. Cobrar usando la estrategia de pago seleccionada.
       const metodoPago = input.metodoPago ?? 'efectivo';
       const estrategiaPago = this.estrategias.pagos[metodoPago];
 
@@ -152,7 +178,6 @@ export class PosCheckoutFacade {
         montoRecibido: input.montoRecibido,
       });
 
-      // 2g. Pagar el pedido (Emitido → Pagado).
       pedido.pagar();
 
       const pagado = await this.repository.actualizarEstado(
@@ -172,7 +197,6 @@ export class PosCheckoutFacade {
         );
       }
 
-      // 2g. Publicar evento de pago en el outbox (dentro de la transacción).
       await context.publish('PedidoPagado', {
         pedidoId: pedido.id,
         clienteId: pedido.clienteId,
@@ -182,7 +206,6 @@ export class PosCheckoutFacade {
         referenciaPago: pago.referencia,
       });
 
-      // 2h. Construir la factura con el Builder.
       const numero = await this.repository.siguienteNumeroFactura(context.db);
       const factura = new FacturaBuilder()
         .conId(randomUUID())
@@ -193,10 +216,28 @@ export class PosCheckoutFacade {
 
       await this.repository.crearFactura(context.db, factura);
 
-      // 2i. Descontar el stock de cada ítem vendido.
       for (const item of items) {
-        await this.descontarStock(item.productoId, item.cantidad);
+        const stockRow = await context.db
+          .selectFrom('stock')
+          .select('cantidad')
+          .where('producto_id', '=', item.productoId)
+          .executeTakeFirst();
+
+        if (!stockRow || stockRow.cantidad < item.cantidad) {
+          throw new DomainError('Stock insuficiente', {
+            code: 'STOCK_INSUFICIENTE',
+            statusCode: 409,
+          });
+        }
+
+        await context.db
+          .updateTable('stock')
+          .set({ cantidad: stockRow.cantidad - item.cantidad })
+          .where('producto_id', '=', item.productoId)
+          .execute();
       }
+
+      await this.carritoRepository.actualizarEstado(context.db, input.carritoId, 'Cerrado');
 
       return { pedido, factura, pago };
     });
