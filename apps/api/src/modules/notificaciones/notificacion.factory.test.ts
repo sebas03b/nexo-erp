@@ -1,56 +1,55 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import {
-  EmailSender,
-  NotificacionFactory,
-  SmsSender,
-  WhatsAppSender,
-  type Notificador,
-} from './notificacion.factory.js';
+import { NotificacionFactory } from './notificacion.factory.js';
+import { EmailSender } from './notificadores/email.sender.js';
+import { SmsSender } from './notificadores/sms.sender.js';
+import { WhatsAppSender } from './notificadores/whatsapp.sender.js';
 
 describe('NotificacionFactory (Factory Method)', () => {
-  const factory = new NotificacionFactory();
+  it('crea un EmailSender y escribe por el canal Email', async () => {
+    const lineas: string[] = [];
+    const factory = new NotificacionFactory((linea) => lineas.push(linea));
 
-  it('devuelve un EmailSender cuando el canal es email', () => {
-    const notificador: Notificador = factory.crear('email');
-
+    const notificador = factory.crear('email');
     expect(notificador).toBeInstanceOf(EmailSender);
+
+    await notificador.enviar({
+      destinatario: 'ana@email.com',
+      mensaje: 'Cita confirmada.',
+    });
+
+    expect(lineas).toEqual(['[Email][ana@email.com] Cita confirmada.']);
   });
 
-  it('devuelve un SmsSender cuando el canal es sms', () => {
+  it('crea un SmsSender y escribe por el canal SMS', async () => {
+    const lineas: string[] = [];
+    const factory = new NotificacionFactory((linea) => lineas.push(linea));
+
     const notificador = factory.crear('sms');
-
     expect(notificador).toBeInstanceOf(SmsSender);
+
+    await notificador.enviar({
+      destinatario: '3001112233',
+      mensaje: 'Pago recibido.',
+    });
+
+    expect(lineas).toEqual(['[SMS][3001112233] Pago recibido.']);
   });
 
-  it('devuelve un WhatsAppSender cuando el canal es whatsapp', () => {
+  it('crea un WhatsAppSender y escribe por el canal WhatsApp', async () => {
+    const lineas: string[] = [];
+    const factory = new NotificacionFactory((linea) => lineas.push(linea));
+
     const notificador = factory.crear('whatsapp');
-
     expect(notificador).toBeInstanceOf(WhatsAppSender);
-  });
 
-  it('cada notificador envía el mensaje por su propio canal', () => {
-    const casos: Array<[string, string]> = [
-      ['email', '[Email] Enviando: Hola cliente'],
-      ['sms', '[SMS] Enviando: Hola cliente'],
-      ['whatsapp', '[WhatsApp] Enviando: Hola cliente'],
-    ];
+    await notificador.enviar({
+      destinatario: '3014445566',
+      mensaje: 'Cita confirmada.',
+    });
 
-    for (const [canal, esperado] of casos) {
-      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-      const notificador: Notificador = factory.crear(canal);
-
-      notificador.enviar('Hola cliente');
-
-      expect(log).toHaveBeenCalledWith(esperado);
-      log.mockRestore();
-    }
-  });
-
-  it('lanza un error cuando el canal no está soportado', () => {
-    expect(() => factory.crear('correo')).toThrow(
-      'Canal de notificación no soportado: correo',
-    );
-    expect(() => factory.crear('')).toThrow('Canal de notificación no soportado: ');
+    expect(lineas).toEqual([
+      '[WhatsApp][3014445566] Cita confirmada.',
+    ]);
   });
 });

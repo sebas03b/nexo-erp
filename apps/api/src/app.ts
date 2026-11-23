@@ -17,6 +17,10 @@ import { EmpleadosRepository } from './modules/empleados/empleados.repository.js
 import { empleadosRoutes } from './modules/empleados/empleados.routes.js';
 import { InventarioRepository } from './modules/inventario/inventario.repository.js';
 import { inventarioRoutes } from './modules/inventario/inventario.routes.js';
+import { NotificacionFactory } from './modules/notificaciones/notificacion.factory.js';
+import { registrarSuscriptoresNotificaciones } from './modules/notificaciones/notificaciones.suscriptores.js';
+import { NotificacionesService } from './modules/notificaciones/notificaciones.service.js';
+import type { ConsultorContactos } from './modules/notificaciones/ports.js';
 import type { AppEventMap } from './shared/events/event-map.js';
 import { PagoEfectivo } from './modules/ventas/domain/payments/pago-efectivo.strategy.js';
 import { PagoPasarela } from './modules/ventas/domain/payments/pago-pasarela.strategy.js';
@@ -42,6 +46,8 @@ import { InMemoryEventBus } from './shared/events/event-bus.js';
 export interface BuildAppOptions {
   db?: Kysely<Database>;
   estrategiasVentas?: EstrategiasVentas;
+  notificacionSalida?: (linea: string) => void;
+  notificacionAdvertencia?: (mensaje: string) => void;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -120,6 +126,34 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const citasRepository = new CitasRepository(db);
   const eventBus = new InMemoryEventBus<AppEventMap>();
   const unitOfWork = new UnitOfWork<AppEventMap>(db, eventBus);
+
+  const contactos: ConsultorContactos = {
+    obtenerContacto: async (clienteId) => {
+      const cliente = await clientesRepository.obtenerCliente(clienteId);
+      if (!cliente) {
+        return null;
+      }
+
+      return {
+        nombre: cliente.nombre,
+        email: cliente.email,
+        telefono: cliente.telefono,
+        canalPreferido: cliente.canalPreferido,
+      };
+    },
+  };
+  const notificacionFactory = new NotificacionFactory(
+    options.notificacionSalida,
+  );
+  const notificacionesService = new NotificacionesService(
+    notificacionFactory,
+    contactos,
+    options.notificacionAdvertencia,
+  );
+  const cancelarNotificaciones = registrarSuscriptoresNotificaciones(
+    eventBus,
+    notificacionesService,
+  );
 
   const catalogo: CatalogoProductos = {
     obtenerPrecio: (productoId) => inventarioRepository.obtenerPrecio(productoId),
@@ -203,11 +237,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     carritoRepository,
   });
 
-  if (ownsDb) {
-    app.addHook('onClose', async () => {
+  app.addHook('onClose', async () => {
+    cancelarNotificaciones();
+    if (ownsDb) {
       await db.destroy();
-    });
-  }
+    }
+  });
 
   return app;
 }
