@@ -45,6 +45,7 @@ describe('Clientes API', () => {
   });
 
   beforeEach(async () => {
+    await db.deleteFrom('citas').execute();
     await db.deleteFrom('clientes').execute();
   });
 

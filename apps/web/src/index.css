@@ -289,6 +289,18 @@ h2 {
   text-align: left;
 }
 
+.citas-tabla th,
+.citas-tabla td {
+  text-align: center;
+}
+
+.citas-tabla th:first-child,
+.citas-tabla td:first-child,
+.citas-tabla th:nth-child(2),
+.citas-tabla td:nth-child(2) {
+  text-align: left;
+}
+
 .acciones-tabla {
   display: inline-flex;
   align-items: center;
@@ -404,6 +416,31 @@ button:disabled {
 }
 
 .estado-anulado {
+  background-color: #7f1d1d;
+  color: #fecaca;
+}
+
+.estado-pendiente {
+  background-color: #713f12;
+  color: #fde68a;
+}
+
+.estado-confirmada {
+  background-color: #1e3a8a;
+  color: #bfdbfe;
+}
+
+.estado-en-proceso {
+  background-color: #312e81;
+  color: #c7d2fe;
+}
+
+.estado-completada {
+  background-color: #14532d;
+  color: #bbf7d0;
+}
+
+.estado-cancelada {
   background-color: #7f1d1d;
   color: #fecaca;
 }

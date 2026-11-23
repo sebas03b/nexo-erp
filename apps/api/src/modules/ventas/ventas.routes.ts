@@ -2,7 +2,7 @@ import type { FastifyPluginCallback } from 'fastify';
 import { z } from 'zod';
 
 import type { UnitOfWork } from '../../shared/db/unit-of-work.js';
-import type { VentasEventMap } from './domain/eventos.js';
+import type { AppEventMap } from '../../shared/events/app-event-map.js';
 import type { VentasRepository } from './ventas.repository.js';
 import type { CatalogoProductos, VerificadorClientes } from './domain/ports.js';
 import type { CarritoRepository } from './pos/carrito.repository.js';
@@ -37,7 +37,7 @@ const checkoutSchema = z.object({
 
 export interface VentasRoutesOptions {
   repository: VentasRepository;
-  unitOfWork: UnitOfWork<VentasEventMap>;
+  unitOfWork: UnitOfWork<AppEventMap>;
   catalogo: CatalogoProductos;
   clientes: VerificadorClientes;
   estrategias: EstrategiasVentas;

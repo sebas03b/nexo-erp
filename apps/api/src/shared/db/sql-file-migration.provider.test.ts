@@ -20,6 +20,7 @@ describe('SqlFileMigrationProvider', () => {
       '0003_inventario_pedidos',
       '0004_pedidos_created_at',
       '0005_carritos',
+      '0006_citas',
     ]);
     expect(typeof migrations['0002_outbox_events']?.up).toBe('function');
     expect(typeof migrations['0002_outbox_events']?.down).toBe('function');

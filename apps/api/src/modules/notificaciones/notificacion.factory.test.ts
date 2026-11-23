@@ -38,7 +38,7 @@ describe('NotificacionFactory (Factory Method)', () => {
 
     for (const [canal, esperado] of casos) {
       const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-      const notificador: Notificador = factory.crear(canal);
+      const notificador: Notificador = factory.crear(canal as 'email' | 'sms' | 'whatsapp');
 
       notificador.enviar('Hola cliente');
 
@@ -48,9 +48,11 @@ describe('NotificacionFactory (Factory Method)', () => {
   });
 
   it('lanza un error cuando el canal no está soportado', () => {
-    expect(() => factory.crear('correo')).toThrow(
+    expect(() => factory.crear('correo' as never)).toThrow(
       'Canal de notificación no soportado: correo',
     );
-    expect(() => factory.crear('')).toThrow('Canal de notificación no soportado: ');
+    expect(() => factory.crear('' as never)).toThrow(
+      'Canal de notificación no soportado: ',
+    );
   });
 });

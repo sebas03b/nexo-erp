@@ -91,6 +91,17 @@ export interface CarritoComandosTable {
   creado_en: Generated<Date>;
 }
 
+export interface CitasTable {
+  id: Generated<string>;
+  cliente_id: string;
+  empleado_id: string | null;
+  inicio: Generated<Date> | Date;
+  fin: Date;
+  estado: 'Pendiente' | 'Confirmada' | 'En Proceso' | 'Completada' | 'Cancelada';
+  notas: string | null;
+  created_at: Generated<Date>;
+}
+
 export interface Database {
   usuarios: UsuariosTable;
   clientes: ClientesTable;
@@ -103,4 +114,5 @@ export interface Database {
   carritos: CarritosTable;
   carrito_items: CarritoItemsTable;
   carrito_comandos: CarritoComandosTable;
+  citas: CitasTable;
 }

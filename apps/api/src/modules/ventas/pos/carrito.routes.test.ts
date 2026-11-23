@@ -63,6 +63,7 @@ describe('Carrito POS - Command API', () => {
     await db.deleteFrom('carrito_comandos').execute();
     await db.deleteFrom('carrito_items').execute();
     await db.deleteFrom('carritos').execute();
+    await db.deleteFrom('citas').execute();
     await db.deleteFrom('stock').execute();
     await db.deleteFrom('productos').execute();
     await db.deleteFrom('clientes').execute();

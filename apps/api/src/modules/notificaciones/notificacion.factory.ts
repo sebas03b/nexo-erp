@@ -1,5 +1,7 @@
 // Patrón: Factory Method
 
+import type { CanalPreferido } from '../clientes/clientes.types.js';
+
 export interface Notificador {
   enviar(mensaje: string): void;
 }
@@ -23,7 +25,7 @@ export class WhatsAppSender implements Notificador {
 }
 
 export class NotificacionFactory {
-  crear(canal: string): Notificador {
+  crear(canal: CanalPreferido): Notificador {
     switch (canal) {
       case 'email':
         return new EmailSender();
@@ -31,8 +33,10 @@ export class NotificacionFactory {
         return new SmsSender();
       case 'whatsapp':
         return new WhatsAppSender();
-      default:
-        throw new Error(`Canal de notificación no soportado: ${canal}`);
+      default: {
+        const _exhaustive: never = canal;
+        throw new Error(`Canal de notificación no soportado: ${_exhaustive}`);
+      }
     }
   }
 }

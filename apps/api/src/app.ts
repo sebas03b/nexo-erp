@@ -8,7 +8,7 @@ import { ClientesRepository } from './modules/clientes/clientes.repository.js';
 import { clientesRoutes } from './modules/clientes/clientes.routes.js';
 import { InventarioRepository } from './modules/inventario/inventario.repository.js';
 import { inventarioRoutes } from './modules/inventario/inventario.routes.js';
-import type { VentasEventMap } from './modules/ventas/domain/eventos.js';
+import type { AppEventMap } from './shared/events/app-event-map.js';
 import { PagoEfectivo } from './modules/ventas/domain/payments/pago-efectivo.strategy.js';
 import { PagoPasarela } from './modules/ventas/domain/payments/pago-pasarela.strategy.js';
 import type { CatalogoProductos, VerificadorClientes } from './modules/ventas/domain/ports.js';
@@ -24,6 +24,12 @@ import { PosCheckoutFacade } from './modules/ventas/pos/pos-checkout.facade.js';
 import { VentasRepository } from './modules/ventas/ventas.repository.js';
 import { ventasRoutes } from './modules/ventas/ventas.routes.js';
 import type { EstrategiasVentas } from './modules/ventas/ventas.service.js';
+import { CitasRepository } from './modules/citas/citas.repository.js';
+import { citasRoutes } from './modules/citas/citas.routes.js';
+import { CitasService } from './modules/citas/citas.service.js';
+import { NotificacionFactory } from './modules/notificaciones/notificacion.factory.js';
+import { ServicioNotificaciones } from './modules/notificaciones/servicio-notificaciones.js';
+import { registrarSuscripcionesNotificaciones } from './modules/notificaciones/suscripciones.js';
 import { createDatabase } from './shared/db/database.js';
 import type { Database } from './shared/db/schema.js';
 import { UnitOfWork } from './shared/db/unit-of-work.js';
@@ -106,8 +112,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   }));
 
   const inventarioRepository = new InventarioRepository(db);
-  const eventBus = new InMemoryEventBus<VentasEventMap>();
-  const unitOfWork = new UnitOfWork<VentasEventMap>(db, eventBus);
+  // PedidoPagado = OrdenPagada del plan de fases.
+  const eventBus = new InMemoryEventBus<AppEventMap>();
+  const unitOfWork = new UnitOfWork<AppEventMap>(db, eventBus);
 
   const catalogo: CatalogoProductos = {
     obtenerPrecio: (productoId) => inventarioRepository.obtenerPrecio(productoId),
@@ -138,6 +145,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   cadenaValidacion.agregar(new ValidarClienteValido());
   cadenaValidacion.agregar(new ValidarStockSuficiente());
 
+  const clientesRepo = new ClientesRepository(db);
+  const notificaciones = new ServicioNotificaciones(
+    new NotificacionFactory(),
+    async (id) => {
+      const cliente = await clientesRepo.obtenerCliente(id);
+      return cliente
+        ? { nombre: cliente.nombre, canalPreferido: cliente.canalPreferido }
+        : null;
+    },
+  );
+  registrarSuscripcionesNotificaciones(eventBus, notificaciones);
+
   const ventasRepository = new VentasRepository(db);
   const carritoRepository = new CarritoRepository(db);
   const carritoService = new CarritoService(
@@ -159,9 +178,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
   );
 
+  const citasRepository = new CitasRepository();
+  const citasService = new CitasService(citasRepository, unitOfWork);
+
   await app.register(inventarioRoutes, { repository: inventarioRepository });
   await app.register(clientesRoutes, {
-    repository: new ClientesRepository(db),
+    repository: clientesRepo,
   });
   await app.register(carritoRoutes, { service: carritoService });
   await app.register(ventasRoutes, {
@@ -173,6 +195,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     facade: posCheckoutFacade,
     carritoRepository,
   });
+  await app.register(citasRoutes, { service: citasService });
 
   if (ownsDb) {
     app.addHook('onClose', async () => {

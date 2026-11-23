@@ -35,7 +35,7 @@ const enlaces: EnlaceSidebar[] = [
     icono: <BiGroup size={20} className="mr-2" />,
   },
   {
-    to: '#',
+    to: '/citas',
     etiqueta: 'Citas',
     icono: <BiCalendar size={20} className="mr-2" />,
   },

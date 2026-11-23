@@ -58,3 +58,14 @@ export interface Carrito {
   impuesto: number;
   total: number;
 }
+
+export interface Cita {
+  id: string;
+  clienteId: string;
+  clienteNombre?: string;
+  empleadoId?: string;
+  inicio: string;
+  fin: string;
+  estado: 'Pendiente' | 'Confirmada' | 'En Proceso' | 'Completada' | 'Cancelada';
+  notas?: string;
+}
