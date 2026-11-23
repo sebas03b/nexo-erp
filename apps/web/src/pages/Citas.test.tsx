@@ -55,19 +55,33 @@ describe('Agenda de Citas', () => {
           if (!actual) {
             return Response.json({ error: { message: 'No encontrada' } }, { status: 404 });
           }
-          if (body.accion === 'confirmar') citas[0] = { ...actual, estado: 'Confirmada' };
-          if (body.accion === 'cancelar') citas[0] = { ...actual, estado: 'Cancelada' };
-          if (body.accion === 'completar' && actual.estado === 'Cancelada') {
-            return Response.json(
-              {
-                error: {
-                  code: 'TRANSICION_INVALIDA',
-                  message: 'Transición de cita inválida: Cancelada → Completada',
-                },
-              },
-              { status: 409 },
-            );
+
+          if (body.accion === 'confirmar') {
+            if (actual.estado !== 'Pendiente') {
+              return Response.json(
+                { error: { code: 'TRANSICION_INVALIDA', message: `Transición de cita inválida: ${actual.estado} → Confirmada` } },
+                { status: 409 },
+              );
+            }
+            citas[0] = { ...actual, estado: 'Confirmada' };
+          } else if (body.accion === 'completar') {
+            if (actual.estado !== 'Confirmada' && actual.estado !== 'En Proceso') {
+              return Response.json(
+                { error: { code: 'TRANSICION_INVALIDA', message: `Transición de cita inválida: ${actual.estado} → Completada` } },
+                { status: 409 },
+              );
+            }
+            citas[0] = { ...actual, estado: 'Completada' };
+          } else if (body.accion === 'cancelar') {
+            if (actual.estado === 'Completada' || actual.estado === 'Cancelada') {
+              return Response.json(
+                { error: { code: 'TRANSICION_INVALIDA', message: `Transición de cita inválida: ${actual.estado} → Cancelada` } },
+                { status: 409 },
+              );
+            }
+            citas[0] = { ...actual, estado: 'Cancelada' };
           }
+
           return Response.json(citas[0]);
         }
 
@@ -96,17 +110,18 @@ describe('Agenda de Citas', () => {
     await screen.findByText('Ana');
     await screen.findByText('Traer documentos');
     await screen.findByText('Pendiente');
+    expect(screen.getByText(/· \d{2}:\d{2} - \d{2}:\d{2}/)).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Horario' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Inicio' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Fin' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
-    await screen.findByText('Confirmada');
+    expect(screen.getByRole('button', { name: 'Enviar recordatorio' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirmar' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
-    await screen.findByText('Cancelada');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Completar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Completar cita' }));
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(
-        'Transición de cita inválida: Cancelada → Completada',
+        'Transición de cita inválida: Pendiente → Completada',
       );
     });
   });

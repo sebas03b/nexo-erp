@@ -1,10 +1,21 @@
 import { useMemo, type JSX } from 'react';
+import { AiOutlineClose } from 'react-icons/ai';
+import { BsCheck2All, BsEnvelopeArrowUp } from 'react-icons/bs';
 
-import { formatearFechaHora } from '../lib/formato';
 import { useCitas } from '../hooks/useCitas';
 
 function claseEstado(estado: string): string {
   return `estado estado-${estado.toLowerCase().replace(/\s+/g, '-')}`;
+}
+
+function formatearHorario(inicioIso: string, finIso: string): string {
+  const inicio = new Date(inicioIso);
+  const fin = new Date(finIso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const fecha = `${pad(inicio.getDate())}/${pad(inicio.getMonth() + 1)}/${inicio.getFullYear()}`;
+  const horaInicio = `${pad(inicio.getHours())}:${pad(inicio.getMinutes())}`;
+  const horaFin = `${pad(fin.getHours())}:${pad(fin.getMinutes())}`;
+  return `${fecha} · ${horaInicio} - ${horaFin}`;
 }
 
 export function Citas(): JSX.Element {
@@ -60,10 +71,9 @@ export function Citas(): JSX.Element {
                 <tr>
                   <th scope="col">Cliente</th>
                   <th scope="col">Notas</th>
-                  <th scope="col">Inicio</th>
-                  <th scope="col">Fin</th>
+                  <th scope="col">Horario</th>
                   <th scope="col">Estado</th>
-                  <th scope="col">Acciones</th>
+                  <th scope="col" className="text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -71,33 +81,38 @@ export function Citas(): JSX.Element {
                   <tr key={cita.id}>
                     <td>{clientesPorId.get(cita.clienteId) ?? cita.clienteId}</td>
                     <td>{cita.notas ?? '—'}</td>
-                    <td>{formatearFechaHora(cita.inicio)}</td>
-                    <td>{formatearFechaHora(cita.fin)}</td>
+                    <td>{formatearHorario(cita.inicio, cita.fin)}</td>
                     <td>
                       <span className={claseEstado(cita.estado)}>{cita.estado}</span>
                     </td>
                     <td>
-                      <div className="acciones-tabla">
+                      <div className="acciones-tabla flex justify-end items-center gap-2">
                         <button
                           type="button"
                           className="boton-secundario boton-compacto"
-                          onClick={() => void cambiarEstado(cita.id, 'confirmar')}
+                          title="Enviar recordatorio"
+                          aria-label="Enviar recordatorio"
+                          onClick={() => {}}
                         >
-                          Confirmar
+                          <BsEnvelopeArrowUp />
                         </button>
                         <button
                           type="button"
                           className="boton-secundario boton-compacto"
+                          title="Completar cita"
+                          aria-label="Completar cita"
                           onClick={() => void cambiarEstado(cita.id, 'completar')}
                         >
-                          Completar
+                          <BsCheck2All />
                         </button>
                         <button
                           type="button"
                           className="boton-secundario boton-compacto boton-eliminar-pedido"
+                          title="Cancelar cita"
+                          aria-label="Cancelar cita"
                           onClick={() => void cambiarEstado(cita.id, 'cancelar')}
                         >
-                          Cancelar
+                          <AiOutlineClose />
                         </button>
                       </div>
                     </td>

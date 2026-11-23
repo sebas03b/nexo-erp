@@ -301,6 +301,12 @@ h2 {
   text-align: left;
 }
 
+.citas-tabla th:last-child,
+.citas-tabla td:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+
 .acciones-tabla {
   display: inline-flex;
   align-items: center;
@@ -726,6 +732,14 @@ button:disabled {
 
 .gap-2 {
   gap: 0.5rem;
+}
+
+.justify-end {
+  justify-content: flex-end;
+}
+
+.text-right {
+  text-align: right;
 }
 
 .gap-4 {
