@@ -31,6 +31,8 @@ export class ClientesService {
     id: string,
     data: ActualizarClienteData,
   ): Promise<Cliente> {
+    await this.obtenerCliente(id);
+
     const cambios: ActualizarClienteData = {};
 
     if (data.email !== undefined) {

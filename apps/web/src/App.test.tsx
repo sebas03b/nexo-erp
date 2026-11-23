@@ -147,6 +147,19 @@ function instalarFetch(
         return Promise.resolve(respuestaJson(opciones.clientes ?? CLIENTES_POR_DEFECTO));
       }
 
+      if (url === '/api/clientes/cliente-1' && init?.method === 'PATCH') {
+        const body = cuerpoJson(init);
+        const cliente = (opciones.clientes ?? CLIENTES_POR_DEFECTO).find(
+          (item) => item.id === 'cliente-1',
+        );
+        return Promise.resolve(
+          respuestaJson({
+            ...cliente,
+            canalPreferido: body?.canalPreferido,
+          }),
+        );
+      }
+
       if (url === '/api/productos') {
         return Promise.resolve(respuestaJson([producto]));
       }
@@ -778,6 +791,26 @@ describe('App', () => {
         'El producto está referenciado por otros registros',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('actualiza el canal preferido de un cliente desde la aplicación', async () => {
+    const fetchMock = instalarFetch();
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('link', { name: 'Clientes' }));
+
+    const selector = await screen.findByLabelText(
+      'Canal preferido de Cliente Prueba',
+    );
+    fireEvent.change(selector, { target: { value: 'sms' } });
+
+    await waitFor(() => expect(selector).toHaveValue('sms'));
+    expect(fetchMock).toHaveBeenCalledWith('/api/clientes/cliente-1', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ canalPreferido: 'sms' }),
+    });
   });
 
   it('navega entre Ventas, Productos y Clientes resaltando la pestaña activa', async () => {

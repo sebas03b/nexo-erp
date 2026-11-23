@@ -42,7 +42,9 @@ export function Clientes(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [recarga, setRecarga] = useState(0);
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
-  const [canalGuardandoId, setCanalGuardandoId] = useState<string | null>(null);
+  const [canalesGuardando, setCanalesGuardando] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const [abierto, setAbierto] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -115,18 +117,25 @@ export function Clientes(): JSX.Element {
     }
 
     setErrorAccion(null);
-    setCanalGuardandoId(cliente.id);
+    setCanalesGuardando((actuales) => {
+      const siguientes = new Set(actuales);
+      siguientes.add(cliente.id);
+      return siguientes;
+    });
 
     try {
-      await enviarJson<ClienteApi>(
+      const respuesta = await enviarJson<ClienteApi>(
         `/api/clientes/${cliente.id}`,
         'PATCH',
         { canalPreferido: canal },
       );
+      const canalConfirmado = normalizarCanalNotificacion(
+        respuesta.canalPreferido,
+      );
       setClientes((actuales) =>
         actuales.map((actual) =>
           actual.id === cliente.id
-            ? { ...actual, canalPreferido: canal }
+            ? { ...actual, canalPreferido: canalConfirmado }
             : actual,
         ),
       );
@@ -137,7 +146,11 @@ export function Clientes(): JSX.Element {
           : 'No se pudo actualizar el canal preferido',
       );
     } finally {
-      setCanalGuardandoId(null);
+      setCanalesGuardando((actuales) => {
+        const siguientes = new Set(actuales);
+        siguientes.delete(cliente.id);
+        return siguientes;
+      });
     }
   }
 
@@ -274,7 +287,7 @@ export function Clientes(): JSX.Element {
                         className="canal-selector"
                         aria-label={`Canal preferido de ${cliente.nombre}`}
                         value={cliente.canalPreferido}
-                        disabled={canalGuardandoId === cliente.id}
+                        disabled={canalesGuardando.has(cliente.id)}
                         onChange={(event) => {
                           const canal = event.target.value;
                           if (esCanalNotificacion(canal)) {
