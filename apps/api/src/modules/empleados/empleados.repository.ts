@@ -1,3 +1,5 @@
+// Patrón: Repository
+
 import type { Kysely } from 'kysely';
 
 import type { Database } from '../../shared/db/schema.js';
@@ -42,7 +44,7 @@ export class EmpleadosRepository {
     return row ? mapEmpleado(row) : null;
   }
 
-  async obtenerEmpleadoParaCita(
+  async obtenerEmpleadoBloqueado(
     executor: Executor,
     id: string,
   ): Promise<Empleado | null> {

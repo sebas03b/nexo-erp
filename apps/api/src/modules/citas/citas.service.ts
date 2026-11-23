@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import { z } from 'zod';
+
 import type { UnitOfWork } from '../../shared/db/unit-of-work.js';
 import {
   DomainError,
@@ -31,10 +33,13 @@ export interface FiltrosCitasInput {
 
 type TransicionCita = 'confirmar' | 'iniciar' | 'completar' | 'cancelar';
 
+const FECHA_ISO = z.iso.datetime({ offset: true });
+
 function analizarFecha(valor: string, campo: string): Date {
+  const validacion = FECHA_ISO.safeParse(valor);
   const fecha = new Date(valor);
 
-  if (Number.isNaN(fecha.getTime())) {
+  if (!validacion.success || Number.isNaN(fecha.getTime())) {
     throw new DomainError(`La fecha ${campo} de la cita es inválida`, {
       code: 'CITA_FECHAS_INVALIDAS',
       statusCode: 400,
@@ -98,15 +103,7 @@ export class CitasService {
       );
     }
 
-    const clienteExiste = await this.#clientes.existe(data.clienteId);
-    if (!clienteExiste) {
-      throw new RecursoNoEncontrado(
-        'CLIENTE_NO_ENCONTRADO',
-        'Cliente no encontrado',
-      );
-    }
-
-    const id = await this.#unitOfWork.execute(async ({ db }) => {
+    return this.#unitOfWork.execute(async ({ db }) => {
       const empleado = await this.#empleados.obtenerEmpleado(data.empleadoId, db);
 
       if (!empleado) {
@@ -121,6 +118,14 @@ export class CitasService {
           code: 'EMPLEADO_INACTIVO',
           statusCode: 409,
         });
+      }
+
+      const clienteExiste = await this.#clientes.existe(data.clienteId, db);
+      if (!clienteExiste) {
+        throw new RecursoNoEncontrado(
+          'CLIENTE_NO_ENCONTRADO',
+          'Cliente no encontrado',
+        );
       }
 
       const solapada = await this.#repository.existeSolapamiento(
@@ -147,10 +152,13 @@ export class CitasService {
         motivo: data.motivo?.trim() || null,
       });
 
-      return citaId;
-    });
+      const creada = await this.#repository.obtenerCitaConExecutor(db, citaId);
+      if (!creada) {
+        throw new Error('No se pudo leer la cita creada');
+      }
 
-    return this.obtenerCita(id);
+      return creada;
+    });
   }
 
   confirmarCita(id: string): Promise<CitaDetalle> {
@@ -200,7 +208,7 @@ export class CitasService {
         break;
     }
 
-    await this.#unitOfWork.execute(async (context) => {
+    return this.#unitOfWork.execute(async (context) => {
       const actualizada = await this.#repository.actualizarEstado(
         context.db,
         id,
@@ -231,8 +239,16 @@ export class CitasService {
           confirmadaEn: new Date().toISOString(),
         });
       }
-    });
 
-    return this.obtenerCita(id);
+      const citaActualizada = await this.#repository.obtenerCitaConExecutor(
+        context.db,
+        id,
+      );
+      if (!citaActualizada) {
+        throw new Error('No se pudo leer la cita actualizada');
+      }
+
+      return citaActualizada;
+    });
   }
 }

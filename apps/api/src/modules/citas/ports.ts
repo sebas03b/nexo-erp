@@ -9,7 +9,10 @@ export interface EmpleadoCita {
 }
 
 export interface VerificadorClienteParaCita {
-  existe(clienteId: string): Promise<boolean>;
+  existe(
+    clienteId: string,
+    executor: Kysely<Database>,
+  ): Promise<boolean>;
 }
 
 export interface ConsultorEmpleadosParaCita {

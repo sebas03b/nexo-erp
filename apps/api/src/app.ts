@@ -15,6 +15,7 @@ import { ClientesRepository } from './modules/clientes/clientes.repository.js';
 import { clientesRoutes } from './modules/clientes/clientes.routes.js';
 import { EmpleadosRepository } from './modules/empleados/empleados.repository.js';
 import { empleadosRoutes } from './modules/empleados/empleados.routes.js';
+import { EmpleadosService } from './modules/empleados/empleados.service.js';
 import { InventarioRepository } from './modules/inventario/inventario.repository.js';
 import { inventarioRoutes } from './modules/inventario/inventario.routes.js';
 import { NotificacionFactory } from './modules/notificaciones/notificacion.factory.js';
@@ -123,6 +124,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const inventarioRepository = new InventarioRepository(db);
   const clientesRepository = new ClientesRepository(db);
   const empleadosRepository = new EmpleadosRepository(db);
+  const empleadosService = new EmpleadosService(empleadosRepository);
   const citasRepository = new CitasRepository(db);
   const eventBus = new InMemoryEventBus<AppEventMap>();
   const unitOfWork = new UnitOfWork<AppEventMap>(db, eventBus);
@@ -172,13 +174,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   };
 
   const clientesParaCita: VerificadorClienteParaCita = {
-    existe: async (clienteId) =>
-      (await clientesRepository.obtenerCliente(clienteId)) !== undefined,
+    existe: async (clienteId, executor) =>
+      (
+        await clientesRepository.obtenerClienteBloqueado(executor, clienteId)
+      ) !== undefined,
   };
 
   const empleadosParaCita: ConsultorEmpleadosParaCita = {
     obtenerEmpleado: (empleadoId, executor) =>
-      empleadosRepository.obtenerEmpleadoParaCita(executor, empleadoId),
+      empleadosRepository.obtenerEmpleadoBloqueado(executor, empleadoId),
   };
 
   const citasService = new CitasService(
@@ -224,7 +228,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   await app.register(inventarioRoutes, { repository: inventarioRepository });
   await app.register(clientesRoutes, { repository: clientesRepository });
-  await app.register(empleadosRoutes, { repository: empleadosRepository });
+  await app.register(empleadosRoutes, { service: empleadosService });
   await app.register(citasRoutes, { service: citasService });
   await app.register(carritoRoutes, { service: carritoService });
   await app.register(ventasRoutes, {

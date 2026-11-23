@@ -46,9 +46,10 @@ La creación de una cita se realiza en una única transacción:
 
 1. Bloquear la fila del empleado con `SELECT ... FOR UPDATE`.
 2. Verificar que el empleado existe y está activo.
-3. Consultar solapamientos dentro de la misma transacción.
-4. Insertar la cita.
-5. Confirmar la transacción.
+3. Bloquear el cliente con `SELECT ... FOR KEY SHARE` y verificar que existe.
+4. Consultar solapamientos dentro de la misma transacción.
+5. Insertar la cita.
+6. Confirmar la transacción.
 
 El bloqueo de la fila del empleado serializa reservas concurrentes del mismo recurso. La condición de solapamiento excluye citas `Cancelada`.
 

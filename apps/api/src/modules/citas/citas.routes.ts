@@ -13,7 +13,7 @@ const crearCitaSchema = z.object({
   empleadoId: z.string().uuid(),
   inicio: z.string().min(1),
   fin: z.string().min(1),
-  motivo: z.string().trim().min(1).max(500).optional(),
+  motivo: z.string().trim().optional(),
 });
 
 const filtrosSchema = z.object({

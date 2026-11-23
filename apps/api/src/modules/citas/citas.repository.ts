@@ -1,4 +1,6 @@
-import type { Kysely } from 'kysely';
+// Patrón: Repository
+
+import { sql, type Kysely } from 'kysely';
 
 import type { Database, EstadoCitaPersistido } from '../../shared/db/schema.js';
 import type { EstadoCita } from './domain/cita-estado.js';
@@ -89,7 +91,14 @@ export class CitasRepository {
   }
 
   async obtenerCita(id: string): Promise<CitaDetalle | null> {
-    const row = await this.#db
+    return this.obtenerCitaConExecutor(this.#db, id);
+  }
+
+  async obtenerCitaConExecutor(
+    executor: Executor,
+    id: string,
+  ): Promise<CitaDetalle | null> {
+    const row = await executor
       .selectFrom('citas')
       .innerJoin('clientes', 'clientes.id', 'citas.cliente_id')
       .innerJoin('empleados', 'empleados.id', 'citas.empleado_id')
@@ -157,7 +166,7 @@ export class CitasRepository {
   ): Promise<boolean> {
     const result = await executor
       .updateTable('citas')
-      .set({ estado: estadoNuevo, actualizado_en: new Date() })
+      .set({ estado: estadoNuevo, actualizado_en: sql`now()` })
       .where('id', '=', id)
       .where('estado', '=', estadoEsperado)
       .executeTakeFirst();

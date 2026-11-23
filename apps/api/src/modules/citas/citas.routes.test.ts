@@ -171,6 +171,12 @@ describe('API de Citas', () => {
     expect(consulta.json<CitaJson>()).toEqual(cita);
   });
 
+  it('normaliza un motivo vacío a null', async () => {
+    const cita = await crearCita({ motivo: '   ' });
+
+    expect(cita.motivo).toBeNull();
+  });
+
   it('lista el catálogo de empleados con sus datos de contacto', async () => {
     const respuesta = await app.inject({
       method: 'GET',
@@ -239,6 +245,23 @@ describe('API de Citas', () => {
     expect(filtradoPorEstado.json<CitaJson[]>()).toEqual([segundaConfirmada]);
   });
 
+  it('rechaza filtros de estado o fecha inválidos', async () => {
+    const estadoInvalido = await app.inject({
+      method: 'GET',
+      url: '/api/citas?estado=Inventado',
+    });
+    expect(estadoInvalido.statusCode).toBe(400);
+
+    const fechaInvalida = await app.inject({
+      method: 'GET',
+      url: '/api/citas?desde=fecha-invalida',
+    });
+    expect(fechaInvalida.statusCode).toBe(400);
+    expect(fechaInvalida.json<ErrorJson>().error.code).toBe(
+      'CITA_FECHAS_INVALIDAS',
+    );
+  });
+
   it('confirma, inicia y completa una cita mediante el State', async () => {
     const cita = await crearCita();
 
@@ -262,6 +285,32 @@ describe('API de Citas', () => {
     });
     expect(completacion.statusCode).toBe(200);
     expect(completacion.json<CitaJson>().estado).toBe('Completada');
+  });
+
+  it('publica CitaConfirmada solo al confirmar', async () => {
+    const confirmada = await crearCita();
+    const cancelada = await crearCita({
+      inicio: '2026-11-25T17:00:00.000Z',
+      fin: '2026-11-25T18:00:00.000Z',
+    });
+
+    for (const transicion of ['confirmar', 'iniciar', 'completar']) {
+      const respuesta = await app.inject({
+        method: 'POST',
+        url: `/api/citas/${confirmada.id}/${transicion}`,
+      });
+      expect(respuesta.statusCode).toBe(200);
+    }
+
+    const cancelacion = await app.inject({
+      method: 'POST',
+      url: `/api/citas/${cancelada.id}/cancelar`,
+    });
+    expect(cancelacion.statusCode).toBe(200);
+
+    const eventos = await db.selectFrom('outbox_events').selectAll().execute();
+    expect(eventos).toHaveLength(1);
+    expect(eventos[0]?.tipo).toBe('CitaConfirmada');
   });
 
   it('rechaza una transición ilegal, conserva el estado y no publica eventos', async () => {
@@ -371,6 +420,36 @@ describe('API de Citas', () => {
     });
     expect(intervaloInvalido.statusCode).toBe(400);
     expect(intervaloInvalido.json<ErrorJson>().error.code).toBe(
+      'CITA_FECHAS_INVALIDAS',
+    );
+
+    const intervaloVacio = await app.inject({
+      method: 'POST',
+      url: '/api/citas',
+      payload: {
+        clienteId,
+        empleadoId: empleadoActivoId,
+        inicio: INICIO,
+        fin: INICIO,
+      },
+    });
+    expect(intervaloVacio.statusCode).toBe(400);
+    expect(intervaloVacio.json<ErrorJson>().error.code).toBe(
+      'CITA_FECHAS_INVALIDAS',
+    );
+
+    const fechaInexistente = await app.inject({
+      method: 'POST',
+      url: '/api/citas',
+      payload: {
+        clienteId,
+        empleadoId: empleadoActivoId,
+        inicio: '2026-02-30T15:00:00.000Z',
+        fin: FIN,
+      },
+    });
+    expect(fechaInexistente.statusCode).toBe(400);
+    expect(fechaInexistente.json<ErrorJson>().error.code).toBe(
       'CITA_FECHAS_INVALIDAS',
     );
   });

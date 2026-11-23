@@ -72,6 +72,20 @@ export class ClientesRepository {
     return row ? mapCliente(row) : undefined;
   }
 
+  async obtenerClienteBloqueado(
+    executor: Kysely<Database>,
+    id: string,
+  ): Promise<Cliente | undefined> {
+    const row = await executor
+      .selectFrom('clientes')
+      .selectAll()
+      .where('id', '=', id)
+      .forKeyShare()
+      .executeTakeFirst();
+
+    return row ? mapCliente(row) : undefined;
+  }
+
   async obtenerClientePorDocumento(documento: string): Promise<Cliente | undefined> {
     const row = await this.#db
       .selectFrom('clientes')
