@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { UnitOfWork, UnitOfWorkContext } from '../../../shared/db/unit-of-work.js';
-import type { VentasEventMap } from '../domain/eventos.js';
+import type { AppEventMap } from '../../../shared/events/event-map.js';
 import type { DescuentoStrategy } from '../domain/pricing/descuento.strategy.js';
 import type { ImpuestoStrategy } from '../domain/pricing/impuesto.strategy.js';
 import type { PagoStrategy } from '../domain/payments/pago.strategy.js';
@@ -139,10 +139,10 @@ function crearUnitOfWork(
   return {
     db,
     execute: <TResult>(
-      work: (context: UnitOfWorkContext<VentasEventMap>) => Promise<TResult>,
+      work: (context: UnitOfWorkContext<AppEventMap>) => Promise<TResult>,
     ): Promise<TResult> => {
-      const context: UnitOfWorkContext<VentasEventMap> = {
-        db: db as UnitOfWorkContext<VentasEventMap>['db'],
+      const context: UnitOfWorkContext<AppEventMap> = {
+        db: db as UnitOfWorkContext<AppEventMap>['db'],
         correlationId: 'test',
         publish: (_tipo: string, _payload: unknown): Promise<void> => {
           eventos.push({ tipo: _tipo, payload: _payload });
@@ -151,7 +151,7 @@ function crearUnitOfWork(
       };
       return work(context);
     },
-  } as unknown as UnitOfWork<VentasEventMap>;
+  } as unknown as UnitOfWork<AppEventMap>;
 }
 
 const cadenaValidacion = {

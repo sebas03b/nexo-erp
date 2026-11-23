@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { UnitOfWork } from '../../../shared/db/unit-of-work.js';
 import { DomainError, RecursoNoEncontrado } from '../../../shared/errors/domain-error.js';
-import type { VentasEventMap } from '../domain/eventos.js';
+import type { AppEventMap } from '../../../shared/events/event-map.js';
 import { FacturaBuilder } from '../domain/factura.builder.js';
 import type { Factura } from '../domain/factura.js';
 import { Pedido, type PedidoItem } from '../domain/pedido.js';
@@ -35,7 +35,7 @@ export class PosCheckoutFacade {
     private readonly clientes: VerificadorClientes,
     private readonly repository: VentasRepository,
     private readonly carritoRepository: CarritoRepository,
-    private readonly unitOfWork: UnitOfWork<VentasEventMap>,
+    private readonly unitOfWork: UnitOfWork<AppEventMap>,
     private readonly verificarStock: (
       productoId: string,
       cantidad: number,

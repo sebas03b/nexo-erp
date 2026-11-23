@@ -8,7 +8,7 @@ import { ClientesRepository } from './modules/clientes/clientes.repository.js';
 import { clientesRoutes } from './modules/clientes/clientes.routes.js';
 import { InventarioRepository } from './modules/inventario/inventario.repository.js';
 import { inventarioRoutes } from './modules/inventario/inventario.routes.js';
-import type { VentasEventMap } from './modules/ventas/domain/eventos.js';
+import type { AppEventMap } from './shared/events/event-map.js';
 import { PagoEfectivo } from './modules/ventas/domain/payments/pago-efectivo.strategy.js';
 import { PagoPasarela } from './modules/ventas/domain/payments/pago-pasarela.strategy.js';
 import type { CatalogoProductos, VerificadorClientes } from './modules/ventas/domain/ports.js';
@@ -106,8 +106,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   }));
 
   const inventarioRepository = new InventarioRepository(db);
-  const eventBus = new InMemoryEventBus<VentasEventMap>();
-  const unitOfWork = new UnitOfWork<VentasEventMap>(db, eventBus);
+  const eventBus = new InMemoryEventBus<AppEventMap>();
+  const unitOfWork = new UnitOfWork<AppEventMap>(db, eventBus);
 
   const catalogo: CatalogoProductos = {
     obtenerPrecio: (productoId) => inventarioRepository.obtenerPrecio(productoId),

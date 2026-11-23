@@ -5,7 +5,7 @@ import type {
   UnitOfWorkContext,
 } from '../../shared/db/unit-of-work.js';
 import { DomainError, RecursoNoEncontrado } from '../../shared/errors/domain-error.js';
-import type { VentasEventMap } from './domain/eventos.js';
+import type { AppEventMap } from '../../shared/events/event-map.js';
 import { Factura } from './domain/factura.js';
 import { Pedido, type PedidoItem } from './domain/pedido.js';
 import type { PedidoDetalle } from './domain/pedido-detalle.js';
@@ -34,18 +34,18 @@ export interface OpcionesPago extends Omit<PagoContexto, 'monto'> {
   readonly metodoPago?: MetodoPago;
 }
 
-type VentasTransaction = UnitOfWorkContext<VentasEventMap>['db'];
+type VentasTransaction = UnitOfWorkContext<AppEventMap>['db'];
 
 export class VentasService {
   readonly #repository: VentasRepository;
-  readonly #unitOfWork: UnitOfWork<VentasEventMap>;
+  readonly #unitOfWork: UnitOfWork<AppEventMap>;
   readonly #clientes: VerificadorClientes;
   readonly #estrategias: EstrategiasVentas;
   readonly #carritoRepository: CarritoRepository;
 
   constructor(
     repository: VentasRepository,
-    unitOfWork: UnitOfWork<VentasEventMap>,
+    unitOfWork: UnitOfWork<AppEventMap>,
     clientes: VerificadorClientes,
     estrategias: EstrategiasVentas,
     carritoRepository: CarritoRepository,
