@@ -31,6 +31,7 @@ export interface PayloadAgregarItem {
 
 export interface PayloadProducto {
   productoId: string;
+  itemId?: string;
 }
 
 export interface PayloadDecrementarItem {
@@ -152,12 +153,31 @@ export class CarritoService {
 
       await comando.ejecutar();
 
+      let payloadFinal = payloadNormalizado;
+      if (comando instanceof AgregarItemCommand) {
+        const itemId = comando.obtenerItemCreadoId();
+        if (itemId) {
+          payloadFinal = {
+            ...payloadNormalizado,
+            itemId,
+            precioUnitario: (comando as unknown as { obtenerEstadoAnterior?: () => unknown })
+              ? undefined
+              : undefined,
+          };
+          // preserve precio for rehidratación of independent lines
+          const item = carrito.items.find((i) => i.itemId === itemId);
+          if (item) {
+            payloadFinal = { ...payloadFinal, precioUnitario: item.precioUnitario };
+          }
+        }
+      }
+
       const items = carrito.items;
       await this.#repository.guardarItems(trx, id, items);
       await this.#repository.registrarComando(trx, {
         carritoId: id,
         tipo,
-        payload: payloadNormalizado,
+        payload: payloadFinal,
         estadoAnterior,
         itemRemovido,
       });
@@ -214,23 +234,34 @@ export class CarritoService {
         const cantidad = this.#leerCantidad(payload, 'cantidad');
         validarCantidadPositiva(cantidad);
 
-        const precio = await this.#obtenerPrecio(executor, productoId);
-        if (precio === null) {
+        const producto = await this.#obtenerProducto(executor, productoId);
+        if (producto === null) {
           throw new RecursoNoEncontrado(
             'PRODUCTO_NO_ENCONTRADO',
             `Producto ${productoId} no encontrado`,
           );
         }
 
-        const existente = carrito.obtenerItem(productoId);
+        const lineaIndependiente = producto.tipo === 'servicio';
+        const existente = lineaIndependiente ? null : carrito.obtenerItem(productoId);
         const cantidadResultante = (existente?.cantidad ?? 0) + cantidad;
-        await this.#asegurarStock(executor, productoId, cantidadResultante);
+        await this.#asegurarStock(executor, productoId, cantidadResultante, producto.tipo);
 
-        const comando = new AgregarItemCommand(carrito, productoId, cantidad, precio);
+        const comando = new AgregarItemCommand(
+          carrito,
+          productoId,
+          cantidad,
+          producto.precio,
+          undefined,
+          undefined,
+          { lineaIndependiente },
+        );
         return {
           comando,
           tipo: 'AGREGAR_ITEM',
-          payloadNormalizado: { productoId, cantidad },
+          payloadNormalizado: lineaIndependiente
+            ? { productoId, cantidad, lineaIndependiente: true }
+            : { productoId, cantidad },
           estadoAnterior: existente ?? null,
           itemRemovido: null,
         };
@@ -259,7 +290,10 @@ export class CarritoService {
       }
       case 'QUITAR_ITEM': {
         const productoId = this.#leerProductoId(payload);
-        const existente = carrito.obtenerItem(productoId);
+        const itemId = this.#leerItemIdOpcional(payload);
+        const existente = itemId
+          ? carrito.obtenerItemPorId(itemId)
+          : carrito.obtenerItem(productoId);
         if (!existente) {
           throw new RecursoNoEncontrado(
             'ITEM_NO_ENCONTRADO',
@@ -267,11 +301,11 @@ export class CarritoService {
           );
         }
 
-        const comando = new QuitarItemCommand(carrito, productoId);
+        const comando = new QuitarItemCommand(carrito, productoId, undefined, undefined, itemId);
         return {
           comando,
           tipo: 'QUITAR_ITEM',
-          payloadNormalizado: { productoId },
+          payloadNormalizado: itemId ? { productoId, itemId } : { productoId },
           estadoAnterior: null,
           itemRemovido: existente,
         };
@@ -295,7 +329,8 @@ export class CarritoService {
         }
 
         if (cantidad > 0) {
-          await this.#asegurarStock(executor, productoId, cantidad);
+          const producto = await this.#obtenerProducto(executor, productoId);
+          await this.#asegurarStock(executor, productoId, cantidad, producto?.tipo);
         }
 
         const comando = new EstablecerCantidadCommand(carrito, productoId, cantidad);
@@ -314,16 +349,27 @@ export class CarritoService {
     const payload = persistido.payload;
     const productoId = typeof payload.productoId === 'string' ? payload.productoId : '';
     const cantidad = typeof payload.cantidad === 'number' ? payload.cantidad : 0;
+    const itemId = typeof payload.itemId === 'string' ? payload.itemId : undefined;
+    const lineaIndependiente =
+      persistido.tipo === 'AGREGAR_ITEM' &&
+      (payload.lineaIndependiente === true || typeof payload.itemId === 'string');
 
     switch (persistido.tipo) {
-      case 'AGREGAR_ITEM':
+      case 'AGREGAR_ITEM': {
+        const precio =
+          persistido.estadoAnterior?.precioUnitario ??
+          persistido.itemRemovido?.precioUnitario ??
+          (typeof payload.precioUnitario === 'number' ? payload.precioUnitario : 0);
         return new AgregarItemCommand(
           carrito,
           productoId,
           cantidad,
-          persistido.estadoAnterior?.precioUnitario ?? 0,
+          precio,
           persistido.estadoAnterior,
+          undefined,
+          { itemId, lineaIndependiente },
         );
+      }
       case 'DECREMENTAR_ITEM':
         return new DecrementarItemCommand(
           carrito,
@@ -332,7 +378,13 @@ export class CarritoService {
           persistido.estadoAnterior,
         );
       case 'QUITAR_ITEM':
-        return new QuitarItemCommand(carrito, productoId, persistido.itemRemovido ?? undefined);
+        return new QuitarItemCommand(
+          carrito,
+          productoId,
+          persistido.itemRemovido ?? undefined,
+          undefined,
+          itemId,
+        );
       case 'ESTABLECER_CANTIDAD':
         return new EstablecerCantidadCommand(
           carrito,
@@ -343,13 +395,16 @@ export class CarritoService {
     }
   }
 
-  async #obtenerPrecio(executor: Kysely<Database>, productoId: string): Promise<number | null> {
+  async #obtenerProducto(
+    executor: Kysely<Database>,
+    productoId: string,
+  ): Promise<{ precio: number; tipo: string } | null> {
     const row = await executor
       .selectFrom('productos')
-      .select('precio')
+      .select(['precio', 'tipo'])
       .where('id', '=', productoId)
       .executeTakeFirst();
-    return row ? Number(row.precio) : null;
+    return row ? { precio: Number(row.precio), tipo: row.tipo } : null;
   }
 
   async #obtenerStockCantidad(executor: Kysely<Database>, productoId: string): Promise<number | null> {
@@ -361,7 +416,16 @@ export class CarritoService {
     return row ? row.cantidad : null;
   }
 
-  async #asegurarStock(executor: Kysely<Database>, productoId: string, cantidad: number): Promise<void> {
+  async #asegurarStock(
+    executor: Kysely<Database>,
+    productoId: string,
+    cantidad: number,
+    tipoProducto?: string,
+  ): Promise<void> {
+    if (tipoProducto === 'servicio') {
+      return;
+    }
+
     const stock = await this.#obtenerStockCantidad(executor, productoId);
     if (stock === null) {
       throw new RecursoNoEncontrado(
@@ -398,6 +462,18 @@ export class CarritoService {
       });
     }
     return valor;
+  }
+
+  #leerItemIdOpcional(payload: Record<string, unknown>): string | undefined {
+    const itemId = payload.itemId;
+    if (itemId === undefined) return undefined;
+    if (typeof itemId !== 'string' || itemId.trim() === '') {
+      throw new DomainError('itemId debe ser una cadena válida', {
+        code: 'DATOS_INVALIDOS',
+        statusCode: 400,
+      });
+    }
+    return itemId;
   }
 
   #construirEstado(

@@ -853,6 +853,22 @@ button:disabled {
   font-size: 0.8rem;
 }
 
+.pos-linea-agenda {
+  color: #93c5fd;
+  font-size: 0.8rem;
+}
+
+.stock-servicio {
+  color: #64748b;
+}
+
+.pos-linea-servicio-cantidad {
+  min-width: 4.5rem;
+  text-align: center;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
 .pos-cantidad {
   width: 4.5rem;
   min-width: 0;

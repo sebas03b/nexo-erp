@@ -74,6 +74,7 @@ export interface CarritosTable {
 }
 
 export interface CarritoItemsTable {
+  id: Generated<string>;
   carrito_id: string;
   producto_id: string;
   cantidad: number;

@@ -217,6 +217,16 @@ export class PosCheckoutFacade {
       await this.repository.crearFactura(context.db, factura);
 
       for (const item of items) {
+        const productoRow = await context.db
+          .selectFrom('productos')
+          .select('tipo')
+          .where('id', '=', item.productoId)
+          .executeTakeFirst();
+
+        if (productoRow?.tipo === 'servicio') {
+          continue;
+        }
+
         const stockRow = await context.db
           .selectFrom('stock')
           .select('cantidad')

@@ -1,5 +1,7 @@
 // Patrón: Command
 
+import { randomUUID } from 'node:crypto';
+
 import type { Kysely } from 'kysely';
 
 import {
@@ -35,6 +37,7 @@ export interface CarritoPersistido {
 }
 
 interface CarritoItemRow {
+  id: string;
   producto_id: string;
   cantidad: number;
   precio_unitario: string;
@@ -61,6 +64,7 @@ const TRADUCCIONES_CARRITO: TraduccionesErrorBd = {
 
 function mapItem(row: CarritoItemRow): ItemCarrito {
   return {
+    itemId: row.id,
     productoId: row.producto_id,
     cantidad: row.cantidad,
     precioUnitario: Number(row.precio_unitario),
@@ -78,7 +82,9 @@ function asItemCarrito(value: unknown): ItemCarrito | null {
   ) {
     return null;
   }
+  const itemId = typeof obj.itemId === 'string' ? obj.itemId : randomUUID();
   return {
+    itemId,
     productoId: obj.productoId,
     cantidad: obj.cantidad,
     precioUnitario: obj.precioUnitario,
@@ -127,9 +133,10 @@ export class CarritoRepository {
 
     const items = await executor
       .selectFrom('carrito_items')
-      .select(['producto_id', 'cantidad', 'precio_unitario'])
+      .select(['id', 'producto_id', 'cantidad', 'precio_unitario'])
       .where('carrito_id', '=', id)
       .orderBy('producto_id')
+      .orderBy('id')
       .execute();
 
     return {
@@ -155,6 +162,7 @@ export class CarritoRepository {
           .insertInto('carrito_items')
           .values(
             items.map((item) => ({
+              id: item.itemId,
               carrito_id: carritoId,
               producto_id: item.productoId,
               cantidad: item.cantidad,

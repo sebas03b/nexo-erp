@@ -5,14 +5,25 @@ import { FiDelete } from 'react-icons/fi';
 import { useCarrito } from '../hooks/useCarrito';
 import { useCatalogo } from '../hooks/useCatalogo';
 import { enviarJson, obtenerJson } from '../lib/api';
-import { formatearMoneda } from '../lib/formato';
+import { formatearFechaHora, formatearMoneda } from '../lib/formato';
 import { claseStock } from '../lib/stock';
-import type { Cliente, Pedido } from '../types';
+import type { AgendamientoServicio, Cliente, Pedido, Producto } from '../types';
 
 type MetodoPago = 'efectivo' | 'pasarela';
 
 function etiquetaMetodoPago(metodo: MetodoPago): string {
   return metodo === 'efectivo' ? 'Efectivo' : 'Pasarela';
+}
+
+function toIso(localDateTime: string): string {
+  return new Date(localDateTime).toISOString();
+}
+
+function sumarMinutos(localDateTime: string, minutos: number): string {
+  const fecha = new Date(localDateTime);
+  fecha.setMinutes(fecha.getMinutes() + minutos);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${fecha.getFullYear()}-${pad(fecha.getMonth() + 1)}-${pad(fecha.getDate())}T${pad(fecha.getHours())}:${pad(fecha.getMinutes())}`;
 }
 
 export function NuevaVenta(): JSX.Element {
@@ -36,6 +47,11 @@ export function NuevaVenta(): JSX.Element {
   const [errorClientes, setErrorClientes] = useState<string | null>(null);
   const [mostrarDropdown, setMostrarDropdown] = useState(false);
   const clienteInputRef = useRef<HTMLDivElement>(null);
+  const [servicioAgendar, setServicioAgendar] = useState<Producto | null>(null);
+  const [inicioAgendamiento, setInicioAgendamiento] = useState('');
+  const [finAgendamiento, setFinAgendamiento] = useState('');
+  const [notasAgendamiento, setNotasAgendamiento] = useState('');
+  const [agendamientos, setAgendamientos] = useState<Record<string, AgendamientoServicio>>({});
 
   const productosPorId = useMemo(() => {
     return new Map(productos.map((producto) => [producto.id, producto]));
@@ -129,6 +145,7 @@ export function NuevaVenta(): JSX.Element {
     setProcesando(true);
 
     try {
+      await crearCitasDeServicios(documentoNormalizado);
       await enviarJson<Pedido>('/api/pedidos', 'POST', {
         documentoCliente: documentoNormalizado,
         carritoId,
@@ -168,6 +185,7 @@ export function NuevaVenta(): JSX.Element {
     setProcesando(true);
 
     try {
+      await crearCitasDeServicios(documentoNormalizado);
       const resultado = await enviarJson<{
         pedido: Pedido;
         factura: { id: string; numero: string; estado: string };
@@ -198,6 +216,89 @@ export function NuevaVenta(): JSX.Element {
   function seleccionarCliente(cliente: Cliente): void {
     setDocumentoCliente(cliente.documento);
     setMostrarDropdown(false);
+  }
+
+  function agendamientoDelItem(itemId: string): AgendamientoServicio | undefined {
+    return agendamientos[itemId];
+  }
+
+  function abrirModalAgendar(producto: Producto): void {
+    const ahora = new Date();
+    ahora.setMinutes(0, 0, 0);
+    ahora.setHours(ahora.getHours() + 1);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const inicio = `${ahora.getFullYear()}-${pad(ahora.getMonth() + 1)}-${pad(ahora.getDate())}T${pad(ahora.getHours())}:${pad(ahora.getMinutes())}`;
+    setServicioAgendar(producto);
+    setInicioAgendamiento(inicio);
+    setFinAgendamiento(sumarMinutos(inicio, 60));
+    setNotasAgendamiento(producto.nombre);
+  }
+
+  function cerrarModalAgendar(): void {
+    setServicioAgendar(null);
+    setInicioAgendamiento('');
+    setFinAgendamiento('');
+    setNotasAgendamiento('');
+  }
+
+  async function confirmarAgendamientoServicio(): Promise<void> {
+    if (!servicioAgendar) return;
+    if (!inicioAgendamiento || !finAgendamiento) {
+      setError('Selecciona fecha y hora de inicio y fin.');
+      return;
+    }
+    const inicioIso = toIso(inicioAgendamiento);
+    const finIso = toIso(finAgendamiento);
+    if (new Date(finIso) <= new Date(inicioIso)) {
+      setError('La hora de fin debe ser posterior a la hora de inicio.');
+      return;
+    }
+
+    const carritoActualizado = await despacharComando('AGREGAR_ITEM', {
+      productoId: servicioAgendar.id,
+      cantidad: 1,
+    });
+    if (!carritoActualizado) return;
+
+    const itemNuevo = [...carritoActualizado.items]
+      .reverse()
+      .find((i) => i.productoId === servicioAgendar.id && !agendamientos[i.itemId]);
+    if (itemNuevo) {
+      setAgendamientos((prev) => ({
+        ...prev,
+        [itemNuevo.itemId]: {
+          inicio: inicioIso,
+          fin: finIso,
+          ...(notasAgendamiento.trim() ? { notas: notasAgendamiento.trim() } : {}),
+        },
+      }));
+    }
+    setError(null);
+    cerrarModalAgendar();
+  }
+
+  async function crearCitasDeServicios(documentoNormalizado: string): Promise<void> {
+    const cliente = clientes.find((c) => c.documento === documentoNormalizado);
+    if (!cliente) return;
+
+    const citasPendientes = items
+      .map((item) => {
+        const ag = agendamientos[item.itemId];
+        if (!ag) return null;
+        const producto = productosPorId.get(item.productoId);
+        if (!producto || producto.tipo !== 'servicio') return null;
+        return { ag, producto };
+      })
+      .filter((x): x is { ag: AgendamientoServicio; producto: Producto } => x !== null);
+
+    for (const { ag, producto } of citasPendientes) {
+      await enviarJson('/api/citas', 'POST', {
+        clienteId: cliente.id,
+        inicio: ag.inicio,
+        fin: ag.fin,
+        notas: ag.notas ?? producto.nombre,
+      });
+    }
   }
 
   const controlesDeshabilitados = cargandoCarrito || procesando;
@@ -303,68 +404,83 @@ export function NuevaVenta(): JSX.Element {
                 const producto = productosPorId.get(item.productoId);
                 const nombre = producto?.nombre ?? item.productoId;
                 const disponible = stock[item.productoId] ?? 0;
+                const ag = agendamientoDelItem(item.itemId);
+                const esServicio = producto?.tipo === 'servicio';
 
                 return (
-                  <li key={item.productoId} className="pos-linea">
+                  <li key={item.itemId} className="pos-linea">
                     <div className="pos-linea-info">
                       <span className="pos-linea-nombre">{nombre}</span>
                       <span className="pos-linea-precio">
                         {formatearMoneda(item.precioUnitario)} c/u
                       </span>
+                      {ag ? (
+                        <span className="pos-linea-agenda">
+                          Agendado: {formatearFechaHora(ag.inicio)}
+                        </span>
+                      ) : null}
                     </div>
 
-                    <div className="pos-controles-cantidad">
-                      <button
-                        type="button"
-                        className="boton-icono boton-decrementar"
-                        aria-label={`Disminuir cantidad de ${nombre}`}
-                        title="Disminuir"
-                        disabled={controlesDeshabilitados || item.cantidad <= 0}
-                        onClick={() =>
-                          void despacharComando('DECREMENTAR_ITEM', {
-                            productoId: item.productoId,
-                            cantidad: 1,
-                          })
-                        }
-                      >
-                        −
-                      </button>
+                    {esServicio ? (
+                      <div className="pos-linea-servicio-cantidad" aria-label={`Cantidad fija de ${nombre}`}>
+                        1
+                      </div>
+                    ) : (
+                      <div className="pos-controles-cantidad">
+                        <button
+                          type="button"
+                          className="boton-icono boton-decrementar"
+                          aria-label={`Disminuir cantidad de ${nombre}`}
+                          title="Disminuir"
+                          disabled={controlesDeshabilitados || item.cantidad <= 0}
+                          onClick={() =>
+                            void despacharComando('DECREMENTAR_ITEM', {
+                              productoId: item.productoId,
+                              cantidad: 1,
+                            })
+                          }
+                        >
+                          −
+                        </button>
 
-                      <input
-                        aria-label={`Cantidad de ${nombre}`}
-                        className="pos-cantidad"
-                        type="number"
-                        min="0"
-                        value={item.cantidad}
-                        disabled={controlesDeshabilitados}
-                        onChange={(event) => {
-                          const valor = event.target.value;
-                          if (valor === '') return;
-                          const numero = Number.parseInt(valor, 10);
-                          if (Number.isNaN(numero) || numero < 0) return;
-                          void despacharComando('ESTABLECER_CANTIDAD', {
-                            productoId: item.productoId,
-                            cantidad: numero,
-                          });
-                        }}
-                      />
+                        <input
+                          aria-label={`Cantidad de ${nombre}`}
+                          className="pos-cantidad"
+                          type="number"
+                          min="0"
+                          value={item.cantidad}
+                          disabled={controlesDeshabilitados}
+                          onChange={(event) => {
+                            const valor = event.target.value;
+                            if (valor === '') return;
+                            const numero = Number.parseInt(valor, 10);
+                            if (Number.isNaN(numero) || numero < 0) return;
+                            void despacharComando('ESTABLECER_CANTIDAD', {
+                              productoId: item.productoId,
+                              cantidad: numero,
+                            });
+                          }}
+                        />
 
-                      <button
-                        type="button"
-                        className="boton-icono boton-incrementar"
-                        aria-label={`Aumentar cantidad de ${nombre}`}
-                        title="Aumentar"
-                        disabled={controlesDeshabilitados || (disponible > 0 && item.cantidad >= disponible)}
-                        onClick={() =>
-                          void despacharComando('AGREGAR_ITEM', {
-                            productoId: item.productoId,
-                            cantidad: 1,
-                          })
-                        }
-                      >
-                        +
-                      </button>
-                    </div>
+                        <button
+                          type="button"
+                          className="boton-icono boton-incrementar"
+                          aria-label={`Aumentar cantidad de ${nombre}`}
+                          title="Aumentar"
+                          disabled={
+                            controlesDeshabilitados || (disponible > 0 && item.cantidad >= disponible)
+                          }
+                          onClick={() =>
+                            void despacharComando('AGREGAR_ITEM', {
+                              productoId: item.productoId,
+                              cantidad: 1,
+                            })
+                          }
+                        >
+                          +
+                        </button>
+                      </div>
+                    )}
 
                     <button
                       type="button"
@@ -372,11 +488,17 @@ export function NuevaVenta(): JSX.Element {
                       aria-label={`Eliminar ${nombre}`}
                       title="Eliminar ítem"
                       disabled={controlesDeshabilitados}
-                      onClick={() =>
+                      onClick={() => {
                         void despacharComando('QUITAR_ITEM', {
                           productoId: item.productoId,
-                        })
-                      }
+                          itemId: item.itemId,
+                        });
+                        setAgendamientos((prev) => {
+                          const next = { ...prev };
+                          delete next[item.itemId];
+                          return next;
+                        });
+                      }}
                     >
                       <FiDelete size={16} />
                     </button>
@@ -484,35 +606,44 @@ export function NuevaVenta(): JSX.Element {
                 </thead>
                 <tbody>
                   {productos.map((producto) => {
+                    const esServicio = producto.tipo === 'servicio';
                     const disponible = stock[producto.id] ?? 0;
                     const enCarrito = cantidadEnCarrito(producto.id);
-                    const sinDisponibilidad = disponible <= enCarrito;
+                    const sinDisponibilidad = !esServicio && disponible <= enCarrito;
 
                     return (
                       <tr key={producto.id}>
                         <td className="celda-id">{producto.sku}</td>
                         <td>{producto.nombre}</td>
                         <td>
-                          <span
-                            className={`stock-badge ${claseStock(disponible)}`}
-                            title={`Stock: ${disponible}`}
-                          >
-                            {disponible}
-                          </span>
+                          {esServicio ? (
+                            <span className="stock-servicio">—</span>
+                          ) : (
+                            <span
+                              className={`stock-badge ${claseStock(disponible)}`}
+                              title={`Stock: ${disponible}`}
+                            >
+                              {disponible}
+                            </span>
+                          )}
                         </td>
                         <td>
                           <button
                             type="button"
                             className="boton-agregar"
                             disabled={controlesDeshabilitados || sinDisponibilidad}
-                            onClick={() =>
+                            onClick={() => {
+                              if (esServicio) {
+                                abrirModalAgendar(producto);
+                                return;
+                              }
                               void despacharComando('AGREGAR_ITEM', {
                                 productoId: producto.id,
                                 cantidad: 1,
-                              })
-                            }
+                              });
+                            }}
                           >
-                            Agregar
+                            {esServicio ? 'Agendar' : 'Agregar'}
                           </button>
                         </td>
                       </tr>
@@ -524,6 +655,79 @@ export function NuevaVenta(): JSX.Element {
           )}
         </section>
       </div>
+
+      {servicioAgendar ? (
+        <div className="modal-backdrop" role="presentation">
+          <section
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="agendar-servicio-titulo"
+          >
+            <h3 id="agendar-servicio-titulo" className="seccion-titulo">
+              Agendar servicio
+            </h3>
+            <p className="modal-descripcion">{servicioAgendar.nombre}</p>
+            <form
+              className="producto-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void confirmarAgendamientoServicio();
+              }}
+            >
+              <div className="producto-form-campo">
+                <label htmlFor="agendar-inicio">Inicio</label>
+                <input
+                  id="agendar-inicio"
+                  type="datetime-local"
+                  value={inicioAgendamiento}
+                  onChange={(event) => {
+                    setInicioAgendamiento(event.target.value);
+                    if (event.target.value) {
+                      setFinAgendamiento(sumarMinutos(event.target.value, 60));
+                    }
+                  }}
+                  required
+                />
+              </div>
+
+              <div className="producto-form-campo">
+                <label htmlFor="agendar-fin">Fin</label>
+                <input
+                  id="agendar-fin"
+                  type="datetime-local"
+                  value={finAgendamiento}
+                  onChange={(event) => setFinAgendamiento(event.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="producto-form-campo">
+                <label htmlFor="agendar-notas">Notas (opcional)</label>
+                <input
+                  id="agendar-notas"
+                  type="text"
+                  value={notasAgendamiento}
+                  onChange={(event) => setNotasAgendamiento(event.target.value)}
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="boton-secundario"
+                  onClick={cerrarModalAgendar}
+                >
+                  Cancelar
+                </button>
+                <button type="submit" disabled={controlesDeshabilitados}>
+                  Confirmar agendamiento
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

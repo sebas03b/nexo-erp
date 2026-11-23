@@ -43,10 +43,18 @@ export interface Pedido {
   items?: PedidoItem[];
 }
 
+export interface AgendamientoServicio {
+  inicio: string;
+  fin: string;
+  notas?: string;
+}
+
 export interface ItemCarrito {
+  itemId: string;
   productoId: string;
   cantidad: number;
   precioUnitario: number;
+  agendamiento?: AgendamientoServicio;
 }
 
 export interface Carrito {

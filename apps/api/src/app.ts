@@ -173,6 +173,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     carritoRepository,
     unitOfWork,
     async (productoId: string, cantidad: number) => {
+      const producto = await inventarioRepository.obtenerProducto(productoId);
+      if (producto?.tipo === 'servicio') {
+        return true;
+      }
       const stock = await inventarioRepository.obtenerStock(productoId);
       return stock !== undefined && stock.cantidad >= cantidad;
     },

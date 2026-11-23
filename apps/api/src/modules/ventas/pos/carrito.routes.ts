@@ -26,6 +26,7 @@ const payloadDecrementarItemSchema = z.object({
 
 const payloadQuitarItemSchema = z.object({
   productoId: z.string().uuid(),
+  itemId: z.string().uuid().optional(),
 });
 
 const payloadEstablecerCantidadSchema = z.object({

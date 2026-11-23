@@ -22,7 +22,7 @@ interface ProductoJson {
 interface CarritoJson {
   id: string;
   estado: string;
-  items: Array<{ productoId: string; cantidad: number; precioUnitario: number }>;
+  items: Array<{ itemId: string; productoId: string; cantidad: number; precioUnitario: number }>;
   subtotal: number;
   descuento: number;
   impuesto: number;
@@ -118,9 +118,9 @@ describe('Carrito POS - Command API', () => {
     const res = await comando(carrito.id, 'AGREGAR_ITEM', { productoId: producto.id, cantidad: 2 });
     expect(res.statusCode).toBe(200);
     const body = res.json<CarritoJson>();
-    expect(body.items).toEqual([
-      { productoId: producto.id, cantidad: 2, precioUnitario: 100 },
-    ]);
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({ productoId: producto.id, cantidad: 2, precioUnitario: 100 });
+    expect(body.items[0]?.itemId).toEqual(expect.any(String));
     expect(body.subtotal).toBe(200);
     expect(body.total).toBe(200);
   });

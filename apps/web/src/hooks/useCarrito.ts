@@ -19,7 +19,7 @@ export interface UseCarritoResult {
   despacharComando: (
     accion: AccionCarrito,
     payload: Record<string, unknown>,
-  ) => Promise<void>;
+  ) => Promise<Carrito | null>;
   deshacer: () => Promise<void>;
   limpiarError: () => void;
   reiniciar: () => Promise<void>;
@@ -73,9 +73,9 @@ export function useCarrito(): UseCarritoResult {
   }, [inicializar]);
 
   const despacharComando = useCallback(
-    async (accion: AccionCarrito, payload: Record<string, unknown>) => {
+    async (accion: AccionCarrito, payload: Record<string, unknown>): Promise<Carrito | null> => {
       const id = carritoIdRef.current;
-      if (!id || enVueloRef.current) return;
+      if (!id || enVueloRef.current) return null;
 
       enVueloRef.current = true;
       setCargando(true);
@@ -87,8 +87,10 @@ export function useCarrito(): UseCarritoResult {
           { accion, payload },
         );
         aplicarCarrito(actualizado);
+        return actualizado;
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : 'No se pudo ejecutar el comando');
+        return null;
       } finally {
         enVueloRef.current = false;
         setCargando(false);

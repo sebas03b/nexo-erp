@@ -6,6 +6,7 @@ import { Carrito, type ItemCarrito } from './carrito.js';
 export class QuitarItemCommand implements Comando {
   #carrito: Carrito;
   #productoId: string;
+  #itemId: string | undefined;
   #itemRemovido: ItemCarrito | undefined;
   #ejecutado: boolean;
 
@@ -14,9 +15,11 @@ export class QuitarItemCommand implements Comando {
     productoId: string,
     itemRemovido?: ItemCarrito,
     ejecutado?: boolean,
+    itemId?: string,
   ) {
     this.#carrito = carrito;
     this.#productoId = productoId;
+    this.#itemId = itemId ?? itemRemovido?.itemId;
     this.#itemRemovido = itemRemovido ? { ...itemRemovido } : undefined;
     this.#ejecutado = ejecutado ?? itemRemovido !== undefined;
   }
@@ -26,8 +29,11 @@ export class QuitarItemCommand implements Comando {
       return;
     }
 
-    const removido = this.#carrito.quitarItem(this.#productoId);
+    const removido = this.#itemId
+      ? this.#carrito.quitarItemPorId(this.#itemId)
+      : this.#carrito.quitarItem(this.#productoId);
     this.#itemRemovido = removido ? { ...removido } : undefined;
+    this.#itemId = this.#itemRemovido?.itemId ?? this.#itemId;
     this.#ejecutado = true;
   }
 

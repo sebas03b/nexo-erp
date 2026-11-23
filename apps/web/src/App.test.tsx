@@ -103,7 +103,7 @@ function instalarFetch(
 ): ReturnType<typeof vi.fn> {
   let pedidoEliminado = false;
 
-  type ItemCarritoMock = { productoId: string; cantidad: number; precioUnitario: number };
+  type ItemCarritoMock = { itemId: string; productoId: string; cantidad: number; precioUnitario: number };
   type CarritoMock = {
     id: string;
     estado: 'Abierto' | 'Cerrado' | 'Descartado';
@@ -186,9 +186,14 @@ function instalarFetch(
         const anterior = existente ? { ...existente } : null;
 
         if (accion === 'AGREGAR_ITEM') {
-          if (existente) existente.cantidad += cantidad;
-          else carritoActual.items.push({ productoId, cantidad, precioUnitario: producto.precio });
-          historial.push({ tipo: accion, payload, anterior, removido: null });
+          if (existente) {
+            existente.cantidad += cantidad;
+            historial.push({ tipo: accion, payload: { ...payload, itemId: existente.itemId }, anterior, removido: null });
+          } else {
+            const itemId = `item-${historial.length + 1}`;
+            carritoActual.items.push({ itemId, productoId, cantidad, precioUnitario: producto.precio });
+            historial.push({ tipo: accion, payload: { ...payload, itemId }, anterior, removido: null });
+          }
         } else if (accion === 'DECREMENTAR_ITEM') {
           if (existente) {
             existente.cantidad -= cantidad;
@@ -196,8 +201,14 @@ function instalarFetch(
           }
           historial.push({ tipo: accion, payload, anterior, removido: null });
         } else if (accion === 'QUITAR_ITEM') {
-          carritoActual.items = carritoActual.items.filter((i) => i.productoId !== productoId);
-          historial.push({ tipo: accion, payload, anterior: null, removido: anterior });
+          const itemId = typeof payload.itemId === 'string' ? payload.itemId : null;
+          const removido = itemId
+            ? carritoActual.items.find((i) => i.itemId === itemId) ?? null
+            : existente;
+          carritoActual.items = itemId
+            ? carritoActual.items.filter((i) => i.itemId !== itemId)
+            : carritoActual.items.filter((i) => i.productoId !== productoId);
+          historial.push({ tipo: accion, payload, anterior: null, removido: removido ? { ...removido } : null });
         } else if (accion === 'ESTABLECER_CANTIDAD') {
           if (existente) {
             if (cantidad <= 0) carritoActual.items = carritoActual.items.filter((i) => i.productoId !== productoId);
@@ -218,7 +229,10 @@ function instalarFetch(
               const item = carritoActual.items.find((i) => i.productoId === ultimo.anterior!.productoId);
               if (item) item.cantidad = ultimo.anterior.cantidad;
             } else {
-              carritoActual.items = carritoActual.items.filter((i) => i.productoId !== String(ultimo.payload.productoId));
+              const itemId = typeof ultimo.payload.itemId === 'string' ? ultimo.payload.itemId : null;
+              carritoActual.items = itemId
+                ? carritoActual.items.filter((i) => i.itemId !== itemId)
+                : carritoActual.items.filter((i) => i.productoId !== String(ultimo.payload.productoId));
             }
           } else if (ultimo.tipo === 'DECREMENTAR_ITEM' || ultimo.tipo === 'ESTABLECER_CANTIDAD') {
             if (ultimo.anterior) {

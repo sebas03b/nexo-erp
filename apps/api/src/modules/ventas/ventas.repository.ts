@@ -175,10 +175,24 @@ export class VentasRepository {
         })
         .execute();
 
+      const itemsAgrupados = new Map<string, { productoId: string; cantidad: number; precioUnitario: number }>();
+      for (const item of pedido.items) {
+        const actual = itemsAgrupados.get(item.productoId);
+        if (actual) {
+          actual.cantidad += item.cantidad;
+        } else {
+          itemsAgrupados.set(item.productoId, {
+            productoId: item.productoId,
+            cantidad: item.cantidad,
+            precioUnitario: item.precioUnitario,
+          });
+        }
+      }
+
       await executor
         .insertInto('pedido_items')
         .values(
-          pedido.items.map((item) => ({
+          [...itemsAgrupados.values()].map((item) => ({
             pedido_id: pedido.id,
             producto_id: item.productoId,
             cantidad: item.cantidad,
