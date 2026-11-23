@@ -394,6 +394,36 @@ describe('API de Citas', () => {
     expect(reutilizacion.statusCode).toBe(201);
   });
 
+  it('acepta ISO con offset y rechaza datetime sin zona horaria', async () => {
+    const conOffset = await app.inject({
+      method: 'POST',
+      url: '/api/citas',
+      payload: {
+        clienteId,
+        empleadoId: empleadoActivoId,
+        inicio: '2026-11-25T10:00:00-05:00',
+        fin: '2026-11-25T11:00:00-05:00',
+      },
+    });
+
+    expect(conOffset.statusCode).toBe(201);
+    expect(conOffset.json<CitaJson>().inicio).toBe('2026-11-25T15:00:00.000Z');
+
+    const sinZona = await app.inject({
+      method: 'POST',
+      url: '/api/citas',
+      payload: {
+        clienteId,
+        empleadoId: empleadoActivoId,
+        inicio: '2026-11-25T17:00:00',
+        fin: '2026-11-25T18:00:00',
+      },
+    });
+
+    expect(sinZona.statusCode).toBe(400);
+    expect(sinZona.json<ErrorJson>().error.code).toBe('CITA_FECHAS_INVALIDAS');
+  });
+
   it('rechaza fechas inválidas o un intervalo no positivo con 400', async () => {
     const invalida = await app.inject({
       method: 'POST',

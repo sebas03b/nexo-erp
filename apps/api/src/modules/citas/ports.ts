@@ -9,14 +9,14 @@ export interface EmpleadoCita {
 }
 
 export interface VerificadorClienteParaCita {
-  existe(
+  existeBloqueado(
     clienteId: string,
     executor: Kysely<Database>,
   ): Promise<boolean>;
 }
 
 export interface ConsultorEmpleadosParaCita {
-  obtenerEmpleado(
+  obtenerEmpleadoBloqueado(
     empleadoId: string,
     executor: Kysely<Database>,
   ): Promise<EmpleadoCita | null>;

@@ -104,7 +104,10 @@ export class CitasService {
     }
 
     return this.#unitOfWork.execute(async ({ db }) => {
-      const empleado = await this.#empleados.obtenerEmpleado(data.empleadoId, db);
+      const empleado = await this.#empleados.obtenerEmpleadoBloqueado(
+        data.empleadoId,
+        db,
+      );
 
       if (!empleado) {
         throw new RecursoNoEncontrado(
@@ -120,7 +123,10 @@ export class CitasService {
         });
       }
 
-      const clienteExiste = await this.#clientes.existe(data.clienteId, db);
+      const clienteExiste = await this.#clientes.existeBloqueado(
+        data.clienteId,
+        db,
+      );
       if (!clienteExiste) {
         throw new RecursoNoEncontrado(
           'CLIENTE_NO_ENCONTRADO',
@@ -193,19 +199,43 @@ export class CitasService {
     });
     const estadoEsperado = cita.estado;
 
-    switch (transicion) {
-      case 'confirmar':
-        cita.confirmar();
-        break;
-      case 'iniciar':
-        cita.iniciar();
-        break;
-      case 'completar':
-        cita.completar();
-        break;
-      case 'cancelar':
-        cita.cancelar();
-        break;
+    try {
+      switch (transicion) {
+        case 'confirmar':
+          cita.confirmar();
+          break;
+        case 'iniciar':
+          cita.iniciar();
+          break;
+        case 'completar':
+          cita.completar();
+          break;
+        case 'cancelar':
+          cita.cancelar();
+          break;
+      }
+    } catch (error) {
+      if (
+        error instanceof DomainError &&
+        error.code === 'TRANSICION_CITA_INVALIDA'
+      ) {
+        const actual = await this.#repository.obtenerCita(id);
+        if (actual && actual.estado !== estadoEsperado) {
+          throw new DomainError(
+            'La cita cambió de estado antes de completar la operación',
+            {
+              code: 'CONFLICTO_ESTADO_CITA',
+              statusCode: 409,
+              details: {
+                estadoEsperado,
+                estadoActual: actual.estado,
+              },
+            },
+          );
+        }
+      }
+
+      throw error;
     }
 
     return this.#unitOfWork.execute(async (context) => {

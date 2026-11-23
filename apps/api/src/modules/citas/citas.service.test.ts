@@ -48,6 +48,31 @@ class CitasRepositoryConBarrera extends CitasRepository {
   }
 }
 
+class CitasRepositoryQueCambiaEstado extends CitasRepository {
+  readonly #db: Kysely<Database>;
+  #cambioRealizado = false;
+
+  constructor(db: Kysely<Database>) {
+    super(db);
+    this.#db = db;
+  }
+
+  override async obtenerCita(id: string): Promise<CitaDetalle | null> {
+    const cita = await super.obtenerCita(id);
+
+    if (!this.#cambioRealizado && cita?.estado === 'Pendiente') {
+      this.#cambioRealizado = true;
+      await this.#db
+        .updateTable('citas')
+        .set({ estado: 'Confirmada' })
+        .where('id', '=', id)
+        .execute();
+    }
+
+    return cita;
+  }
+}
+
 describe('CitasService', () => {
   let db: Kysely<Database>;
   let citaId: string;
@@ -121,17 +146,18 @@ describe('CitasService', () => {
     unitOfWork: UnitOfWork<AppEventMap>,
   ): CitasService {
     const clientes: VerificadorClienteParaCita = {
-      existe: async (id, executor) => {
+      existeBloqueado: async (id, executor) => {
         const cliente = await executor
           .selectFrom('clientes')
           .select('id')
           .where('id', '=', id)
+          .forKeyShare()
           .executeTakeFirst();
         return cliente !== undefined;
       },
     };
     const empleados: ConsultorEmpleadosParaCita = {
-      obtenerEmpleado: async (id, executor) => {
+      obtenerEmpleadoBloqueado: async (id, executor) => {
         const empleado = await executor
           .selectFrom('empleados')
           .select(['id', 'nombre', 'activo'])
@@ -186,6 +212,32 @@ describe('CitasService', () => {
     expect(eventos).toHaveLength(1);
     expect(eventos[0]?.tipo).toBe('CitaConfirmada');
     expect(eventosRecibidos).toBe(1);
+  });
+
+  it('devuelve CONFLICTO_ESTADO_CITA si una transición inválida coincide con un cambio concurrente', async () => {
+    const eventBus = new InMemoryEventBus<AppEventMap>();
+    const unitOfWork = new UnitOfWork<AppEventMap>(db, eventBus);
+    const repository = new CitasRepositoryQueCambiaEstado(db);
+    const service = crearServicio(repository, unitOfWork);
+
+    await expect(service.iniciarCita(citaId)).rejects.toMatchObject({
+      code: 'CONFLICTO_ESTADO_CITA',
+      statusCode: 409,
+      details: {
+        estadoEsperado: 'Pendiente',
+        estadoActual: 'Confirmada',
+      },
+    });
+
+    const persistida = await db
+      .selectFrom('citas')
+      .select('estado')
+      .where('id', '=', citaId)
+      .executeTakeFirstOrThrow();
+    expect(persistida.estado).toBe('Confirmada');
+
+    const eventos = await db.selectFrom('outbox_events').selectAll().execute();
+    expect(eventos).toHaveLength(0);
   });
 
   it('revierte estado y Outbox si falla después de publicar CitaConfirmada', async () => {

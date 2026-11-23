@@ -174,14 +174,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   };
 
   const clientesParaCita: VerificadorClienteParaCita = {
-    existe: async (clienteId, executor) =>
+    existeBloqueado: async (clienteId, executor) =>
       (
         await clientesRepository.obtenerClienteBloqueado(executor, clienteId)
       ) !== undefined,
   };
 
   const empleadosParaCita: ConsultorEmpleadosParaCita = {
-    obtenerEmpleado: (empleadoId, executor) =>
+    obtenerEmpleadoBloqueado: (empleadoId, executor) =>
       empleadosRepository.obtenerEmpleadoBloqueado(executor, empleadoId),
   };
 
