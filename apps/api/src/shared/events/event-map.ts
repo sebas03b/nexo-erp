@@ -17,6 +17,8 @@ export type AppEventMap = {
     citaId: string;
     clienteId: string;
     empleadoId: string;
+    empleadoNombre: string;
+    motivo: string | null;
     inicio: string;
     fin: string;
     confirmadaEn: string;

@@ -26,8 +26,8 @@ Un type guard valida valores desconocidos. El normalizador usa `email` como valo
 
 ## Reglas de negocio
 
-1. `CitaConfirmada` produce una notificación de confirmación de cita.
-2. `PedidoPagado` produce una notificación de comprobante de pago.
+1. `CitaConfirmada` produce una notificación con fecha, hora, motivo y nombre del empleado.
+2. `PedidoPagado` produce una notificación con el total y la referencia de pago.
 3. Al notificar se consulta el contacto y la preferencia actuales del cliente.
 4. El evento no congela el canal ni el correo o teléfono del destinatario.
 5. Para `email` se usa `email`; para `sms` y `whatsapp` se usa `telefono`.
@@ -65,12 +65,12 @@ La factory con `switch` es funcionalmente una **Simple Factory** en la clasifica
 ### Salidas simuladas
 
 ```text
-[Email][ana@email.com] Cita confirmada para el 25/11/2026 10:00.
-[SMS][3001112233] Pago recibido por el pedido 123. Total: $200.00.
-[WhatsApp][3014445566] Cita confirmada para el 25/11/2026 10:00.
+[Email][ana@email.com] Cita confirmada para el 25/11/2026 10:00 con Laura Pérez. Motivo: Corte y color.
+[SMS][3001112233] Pago recibido por el pedido 123. Total: $200.00. Referencia: PAGO-1.
+[WhatsApp][3014445566] Cita confirmada para el 25/11/2026 10:00 con Laura Pérez. Motivo: Corte y color.
 ```
 
-La salida se inyecta en la factory y en el servicio para que las pruebas no dependan de `console.log`.
+La salida del canal se inyecta en `NotificacionFactory`. El servicio recibe por separado un sumidero opcional de advertencias. Así las pruebas no dependen de `console.log` ni de `console.warn`.
 
 ## Contratos
 
@@ -106,27 +106,14 @@ export interface ConsultorContactos {
 
 ## Eventos consumidos
 
-El contrato canónico vive en `apps/api/src/shared/events/event-map.ts`.
+El contrato canónico vive en `apps/api/src/shared/events/event-map.ts`. Los bloques siguientes son ilustrativos y no se redeclaran en Notificaciones:
 
 ```ts
-CitaConfirmada: {
-  citaId: string;
-  clienteId: string;
-  empleadoId: string;
-  inicio: string;
-  fin: string;
-  confirmadaEn: string;
-};
-
-PedidoPagado: {
-  pedidoId: string;
-  clienteId: string;
-  total: number;
-  pagadoEn: string;
-  metodoPago: string;
-  referenciaPago: string;
-};
+type CitaConfirmada = AppEventMap['CitaConfirmada'];
+type PedidoPagado = AppEventMap['PedidoPagado'];
 ```
+
+`CitaConfirmada` contiene `empleadoNombre` y `motivo` como datos de agenda. No contiene canal, correo ni teléfono. `PedidoPagado` contiene `total` y `referenciaPago`, que permiten componer el comprobante sin consultar Ventas.
 
 `notificaciones.suscriptores.ts` comienza con `// Patrón: Observer` y registra ambos eventos. `app.ts` registra el suscriptor antes de aceptar peticiones.
 
@@ -172,4 +159,4 @@ También se admiten actualizaciones parciales de `email` y `telefono`; ambos ace
 - `procesado_en` no se actualiza en el flujo productivo actual.
 - Las notificaciones no se persisten.
 - Los envíos son simulados y no se integran con proveedores reales.
-- La consulta de contactos es síncrona respecto al procesamiento del evento, pero ocurre en el suscriptor después del commit, no al publicar.
+- La consulta de contactos es secuencial dentro del suscriptor y ocurre después del commit, no al publicar.

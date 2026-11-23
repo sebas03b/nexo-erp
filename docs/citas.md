@@ -141,20 +141,23 @@ Los filtros `desde` y `hasta` son ISO opcionales y seleccionan citas por solapam
 
 ## Eventos
 
-Citas publica `CitaConfirmada` dentro de la misma transacción que persiste la transición:
+Citas publica `CitaConfirmada` dentro de la misma transacción que persiste la transición. La forma canónica del payload es `AppEventMap['CitaConfirmada']`, definida únicamente en `apps/api/src/shared/events/event-map.ts`:
 
 ```ts
-export type CitaConfirmada = {
+// Payload ilustrativo; no se redeclara en el módulo de Citas.
+type CitaConfirmada = {
   citaId: string;
   clienteId: string;
   empleadoId: string;
+  empleadoNombre: string;
+  motivo: string | null;
   inicio: string;
   fin: string;
   confirmadaEn: string;
 };
 ```
 
-El evento transporta identificadores y datos de agenda, no canal ni datos de contacto. El Outbox lo persiste atómicamente y el bus en memoria lo entrega después del commit.
+El evento transporta identificadores y datos de agenda, no canal ni datos de contacto. `empleadoNombre` y `motivo` permiten que el mensaje de confirmación sea autosuficiente sin consultar el módulo de Citas desde Notificaciones. El Outbox lo persiste atómicamente y el bus en memoria lo entrega después del commit.
 
 ## Arquitectura y patrón State
 
