@@ -1056,6 +1056,11 @@ select {
   font: inherit;
 }
 
+.canal-selector {
+  width: 100%;
+  min-width: 9rem;
+}
+
 .placeholder-card p {
   max-width: 46rem;
   color: #94a3b8;

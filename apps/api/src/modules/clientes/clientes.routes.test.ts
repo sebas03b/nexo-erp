@@ -169,4 +169,138 @@ describe('Clientes API', () => {
       'DOCUMENTO_DUPLICADO',
     );
   });
+
+  it('PATCH /api/clientes/:id actualiza solo el canal preferido', async () => {
+    const crear = await app.inject({
+      method: 'POST',
+      url: '/api/clientes',
+      body: {
+        nombre: 'Ana Pérez',
+        documento: '12345678',
+        email: 'ana@example.com',
+        telefono: '3000000000',
+        canalPreferido: 'email',
+      },
+    });
+    const cliente = crear.json<{ id: string }>();
+
+    const respuesta = await app.inject({
+      method: 'PATCH',
+      url: `/api/clientes/${cliente.id}`,
+      body: { canalPreferido: 'whatsapp' },
+    });
+
+    expect(respuesta.statusCode).toBe(200);
+    expect(respuesta.json()).toMatchObject({
+      id: cliente.id,
+      nombre: 'Ana Pérez',
+      email: 'ana@example.com',
+      telefono: '3000000000',
+      canalPreferido: 'whatsapp',
+    });
+  });
+
+  it('PATCH /api/clientes/:id actualiza email y teléfono', async () => {
+    const crear = await app.inject({
+      method: 'POST',
+      url: '/api/clientes',
+      body: {
+        nombre: 'Luis Gómez',
+        documento: '87654321',
+        email: 'luis@example.com',
+        telefono: '3000000000',
+        canalPreferido: 'email',
+      },
+    });
+    const cliente = crear.json<{ id: string }>();
+
+    const respuesta = await app.inject({
+      method: 'PATCH',
+      url: `/api/clientes/${cliente.id}`,
+      body: {
+        email: 'nuevo@example.com',
+        telefono: '3011112222',
+      },
+    });
+
+    expect(respuesta.statusCode).toBe(200);
+    expect(respuesta.json()).toMatchObject({
+      email: 'nuevo@example.com',
+      telefono: '3011112222',
+      canalPreferido: 'email',
+    });
+  });
+
+  it('PATCH /api/clientes/:id permite eliminar email y teléfono', async () => {
+    const crear = await app.inject({
+      method: 'POST',
+      url: '/api/clientes',
+      body: {
+        nombre: 'María Díaz',
+        documento: '11223344',
+        email: 'maria@example.com',
+        telefono: '3000000000',
+        canalPreferido: 'sms',
+      },
+    });
+    const cliente = crear.json<{ id: string }>();
+
+    const respuesta = await app.inject({
+      method: 'PATCH',
+      url: `/api/clientes/${cliente.id}`,
+      body: { email: null, telefono: null },
+    });
+
+    expect(respuesta.statusCode).toBe(200);
+    expect(respuesta.json<{ email?: string; telefono?: string }>()).toEqual(
+      expect.objectContaining({
+        id: cliente.id,
+        canalPreferido: 'sms',
+      }),
+    );
+    expect(respuesta.json<{ email?: string }>().email).toBeUndefined();
+    expect(respuesta.json<{ telefono?: string }>().telefono).toBeUndefined();
+  });
+
+  it('PATCH /api/clientes/:id rechaza un canal inválido o un cuerpo vacío', async () => {
+    const crear = await app.inject({
+      method: 'POST',
+      url: '/api/clientes',
+      body: {
+        nombre: 'Ana Pérez',
+        documento: '12345678',
+        email: 'ana@example.com',
+        telefono: '3000000000',
+        canalPreferido: 'email',
+      },
+    });
+    const cliente = crear.json<{ id: string }>();
+
+    const canalInvalido = await app.inject({
+      method: 'PATCH',
+      url: `/api/clientes/${cliente.id}`,
+      body: { canalPreferido: 'correo' },
+    });
+    expect(canalInvalido.statusCode).toBe(400);
+
+    const cuerpoVacio = await app.inject({
+      method: 'PATCH',
+      url: `/api/clientes/${cliente.id}`,
+      body: {},
+    });
+    expect(cuerpoVacio.statusCode).toBe(400);
+  });
+
+  it('PATCH /api/clientes/:id devuelve 404 para un cliente inexistente', async () => {
+    const respuesta = await app.inject({
+      method: 'PATCH',
+      url: '/api/clientes/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      body: { canalPreferido: 'email' },
+    });
+
+    expect(respuesta.statusCode).toBe(404);
+    expect(respuesta.json<{ error: { code: string } }>().error.code).toBe(
+      'CLIENTE_NO_ENCONTRADO',
+    );
+  });
 });

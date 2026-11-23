@@ -1,5 +1,9 @@
 import { DomainError, RecursoNoEncontrado } from '../../shared/errors/domain-error.js';
-import type { Cliente, CrearClienteData } from './clientes.types.js';
+import type {
+  ActualizarClienteData,
+  Cliente,
+  CrearClienteData,
+} from './clientes.types.js';
 import type { ClientesRepository } from './clientes.repository.js';
 
 export class ClientesService {
@@ -18,6 +22,36 @@ export class ClientesService {
 
     if (!cliente) {
       throw new RecursoNoEncontrado('CLIENTE_NO_ENCONTRADO', 'Cliente no encontrado');
+    }
+
+    return cliente;
+  }
+
+  async actualizarCliente(
+    id: string,
+    data: ActualizarClienteData,
+  ): Promise<Cliente> {
+    const cambios: ActualizarClienteData = {};
+
+    if (data.email !== undefined) {
+      cambios.email = data.email === null ? null : data.email.trim();
+    }
+
+    if (data.telefono !== undefined) {
+      cambios.telefono =
+        data.telefono === null ? null : data.telefono.trim();
+    }
+
+    if (data.canalPreferido !== undefined) {
+      cambios.canalPreferido = data.canalPreferido;
+    }
+
+    const cliente = await this.#repository.actualizarCliente(id, cambios);
+    if (!cliente) {
+      throw new RecursoNoEncontrado(
+        'CLIENTE_NO_ENCONTRADO',
+        'Cliente no encontrado',
+      );
     }
 
     return cliente;

@@ -17,6 +17,32 @@ const crearClienteSchema = z.object({
   canalPreferido: z.enum(CANALES_NOTIFICACION),
 });
 
+const actualizarClienteSchema = z
+  .object({
+    email: z
+      .string()
+      .trim()
+      .email('El correo electrónico no es válido')
+      .nullable()
+      .optional(),
+    telefono: z
+      .string()
+      .trim()
+      .min(1, 'El teléfono no puede estar vacío')
+      .nullable()
+      .optional(),
+    canalPreferido: z.enum(CANALES_NOTIFICACION).optional(),
+  })
+  .refine(
+    (data) =>
+      data.email !== undefined ||
+      data.telefono !== undefined ||
+      data.canalPreferido !== undefined,
+    {
+      message: 'Debes enviar al menos un campo para actualizar',
+    },
+  );
+
 export interface ClientesRoutesOptions {
   repository: ClientesRepository;
 }
@@ -39,6 +65,16 @@ export const clientesRoutes: FastifyPluginCallback<ClientesRoutesOptions> = (
       return reply.code(201).send(cliente);
     },
   );
+
+  app.patch<{
+    Params: { id: string };
+    Body: z.infer<typeof actualizarClienteSchema>;
+  }>('/api/clientes/:id', async (request) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const data = actualizarClienteSchema.parse(request.body);
+
+    return service.actualizarCliente(id, data);
+  });
 
   app.delete<{ Params: { id: string } }>('/api/clientes/:id', async (request, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);

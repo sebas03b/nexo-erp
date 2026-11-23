@@ -5,8 +5,15 @@ import {
   type TraduccionesErrorBd,
 } from '../../shared/db/errores-postgres.js';
 import type { Database } from '../../shared/db/schema.js';
-import { normalizarCanalNotificacion } from '../../shared/types/canal-notificacion.js';
-import type { Cliente, CrearClienteData } from './clientes.types.js';
+import {
+  normalizarCanalNotificacion,
+  type CanalNotificacion,
+} from '../../shared/types/canal-notificacion.js';
+import type {
+  ActualizarClienteData,
+  Cliente,
+  CrearClienteData,
+} from './clientes.types.js';
 
 const TRADUCCIONES_CLIENTE: TraduccionesErrorBd = {
   '23505': {
@@ -114,6 +121,42 @@ export class ClientesRepository {
     } catch (error) {
       traducirErrorBd(error, TRADUCCIONES_CLIENTE);
     }
+  }
+
+  async actualizarCliente(
+    id: string,
+    data: ActualizarClienteData,
+  ): Promise<Cliente | undefined> {
+    const cambios: {
+      email?: string | null;
+      telefono?: string | null;
+      canal_preferido?: CanalNotificacion;
+    } = {};
+
+    if (data.email !== undefined) {
+      cambios.email = data.email;
+    }
+
+    if (data.telefono !== undefined) {
+      cambios.telefono = data.telefono;
+    }
+
+    if (data.canalPreferido !== undefined) {
+      cambios.canal_preferido = data.canalPreferido;
+    }
+
+    if (Object.keys(cambios).length === 0) {
+      return this.obtenerCliente(id);
+    }
+
+    const row = await this.#db
+      .updateTable('clientes')
+      .set(cambios)
+      .where('id', '=', id)
+      .returningAll()
+      .executeTakeFirst();
+
+    return row ? mapCliente(row) : undefined;
   }
 
   async eliminarCliente(id: string): Promise<boolean> {

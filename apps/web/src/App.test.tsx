@@ -805,6 +805,8 @@ describe('App', () => {
       'aria-current',
       'page',
     );
-    expect(await screen.findByText('WhatsApp')).toBeInTheDocument();
+    expect(
+      await screen.findByLabelText('Canal preferido de Cliente Prueba'),
+    ).toHaveValue('whatsapp');
   });
 });

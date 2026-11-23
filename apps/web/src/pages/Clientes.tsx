@@ -42,6 +42,7 @@ export function Clientes(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [recarga, setRecarga] = useState(0);
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
+  const [canalGuardandoId, setCanalGuardandoId] = useState<string | null>(null);
 
   const [abierto, setAbierto] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -103,6 +104,41 @@ export function Clientes(): JSX.Element {
     }
 
     setAbierto(false);
+  }
+
+  async function actualizarCanalPreferido(
+    cliente: Cliente,
+    canal: CanalPreferido,
+  ): Promise<void> {
+    if (canal === cliente.canalPreferido) {
+      return;
+    }
+
+    setErrorAccion(null);
+    setCanalGuardandoId(cliente.id);
+
+    try {
+      await enviarJson<ClienteApi>(
+        `/api/clientes/${cliente.id}`,
+        'PATCH',
+        { canalPreferido: canal },
+      );
+      setClientes((actuales) =>
+        actuales.map((actual) =>
+          actual.id === cliente.id
+            ? { ...actual, canalPreferido: canal }
+            : actual,
+        ),
+      );
+    } catch (caught) {
+      setErrorAccion(
+        caught instanceof Error
+          ? caught.message
+          : 'No se pudo actualizar el canal preferido',
+      );
+    } finally {
+      setCanalGuardandoId(null);
+    }
   }
 
   async function eliminarCliente(cliente: Cliente): Promise<void> {
@@ -234,9 +270,24 @@ export function Clientes(): JSX.Element {
                     <td>{cliente.email ?? '—'}</td>
                     <td>{cliente.telefono ?? '—'}</td>
                     <td>
-                      <span className={`canal canal-${cliente.canalPreferido}`}>
-                        {ETIQUETAS_CANAL[cliente.canalPreferido]}
-                      </span>
+                      <select
+                        className="canal-selector"
+                        aria-label={`Canal preferido de ${cliente.nombre}`}
+                        value={cliente.canalPreferido}
+                        disabled={canalGuardandoId === cliente.id}
+                        onChange={(event) => {
+                          const canal = event.target.value;
+                          if (esCanalNotificacion(canal)) {
+                            void actualizarCanalPreferido(cliente, canal);
+                          }
+                        }}
+                      >
+                        {CANALES_NOTIFICACION.map((canal) => (
+                          <option key={canal} value={canal}>
+                            {ETIQUETAS_CANAL[canal]}
+                          </option>
+                        ))}
+                      </select>
                     </td>
                     <td>
                       <div className="acciones-tabla">

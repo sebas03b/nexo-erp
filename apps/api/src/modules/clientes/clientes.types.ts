@@ -18,3 +18,9 @@ export interface CrearClienteData {
   telefono?: string;
   canalPreferido: CanalPreferido;
 }
+
+export interface ActualizarClienteData {
+  email?: string | null;
+  telefono?: string | null;
+  canalPreferido?: CanalPreferido;
+}
