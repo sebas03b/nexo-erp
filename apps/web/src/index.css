@@ -1207,3 +1207,165 @@ select {
   background-color: #334155;
   color: #f8fafc;
 }
+
+.citas-tabla-contenedor {
+  overflow-x: auto;
+}
+
+.citas-tabla {
+  min-width: 58rem;
+}
+
+.citas-tabla th,
+.citas-tabla td {
+  vertical-align: middle;
+}
+
+.citas-tabla th:nth-child(3),
+.citas-tabla td:nth-child(3),
+.citas-tabla th:nth-child(4),
+.citas-tabla td:nth-child(4) {
+  text-align: left;
+}
+
+.citas-tabla th:nth-child(5),
+.citas-tabla td:nth-child(5),
+.citas-tabla th:nth-child(6),
+.citas-tabla td:nth-child(6) {
+  text-align: center;
+}
+
+.cita-fecha,
+.cita-hora-fin {
+  display: block;
+}
+
+.cita-fecha {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cita-hora-fin {
+  margin-top: 0.2rem;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.estado-badge {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.estado-pendiente {
+  background-color: #1e3a8a;
+  color: #bfdbfe;
+}
+
+.estado-confirmada {
+  background-color: #713f12;
+  color: #fde68a;
+}
+
+.estado-en-proceso {
+  background-color: #155e75;
+  color: #a5f3fc;
+}
+
+.estado-completada {
+  background-color: #14532d;
+  color: #bbf7d0;
+}
+
+.estado-cancelada {
+  background-color: #7f1d1d;
+  color: #fecaca;
+}
+
+.agenda-filtros {
+  align-items: flex-end;
+}
+
+.filtro-fecha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.6rem;
+}
+
+.filtro-fecha label {
+  display: block;
+  width: 100%;
+  margin-bottom: 0.3rem;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.filtro-fecha input {
+  min-width: 11rem;
+}
+
+.cita-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.cita-form-campo {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.cita-form-campo label {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.cita-form-campo input,
+.cita-form-campo select {
+  width: 100%;
+  min-width: 0;
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.modal-header .seccion-titulo {
+  margin: 0;
+}
+
+.modal-cerrar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid #334155;
+  background-color: transparent;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+@media (max-width: 600px) {
+  .agenda-filtros,
+  .filtro-fecha {
+    align-items: stretch;
+  }
+
+  .filtro-fecha,
+  .filtro-fecha input,
+  .filtro-fecha button {
+    width: 100%;
+  }
+}

@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import { Layout } from './components/Layout';
+import { Citas } from './pages/Citas';
 import { Clientes } from './pages/Clientes';
 import { ListadoVentas } from './pages/ListadoVentas';
 import { NuevaVenta } from './pages/NuevaVenta';
@@ -17,6 +18,7 @@ export function App(): JSX.Element {
           <Route path="/ventas/nueva" element={<NuevaVenta />} />
           <Route path="/productos" element={<Productos />} />
           <Route path="/clientes" element={<Clientes />} />
+          <Route path="/citas" element={<Citas />} />
           <Route path="*" element={<Navigate to="/ventas" replace />} />
         </Route>
       </Routes>

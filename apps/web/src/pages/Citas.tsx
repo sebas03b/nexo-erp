@@ -1,0 +1,529 @@
+import {
+  useEffect,
+  useState,
+  type FormEvent,
+  type JSX,
+} from 'react';
+
+import { enviarJson, obtenerJson } from '../lib/api';
+import {
+  convertirDateTimeLocalAISO,
+  formatearFechaHora,
+  obtenerRangoDiaBogota,
+} from '../lib/formato';
+import type {
+  Cita,
+  CrearCitaPayload,
+  Cliente,
+  Empleado,
+  EstadoCita,
+} from '../types';
+
+type TransicionCita = 'confirmar' | 'iniciar' | 'completar' | 'cancelar';
+
+interface AccionCita {
+  etiqueta: string;
+  transicion: TransicionCita;
+}
+
+const ACCIONES_POR_ESTADO: Record<EstadoCita, AccionCita[]> = {
+  Pendiente: [
+    { etiqueta: 'Confirmar', transicion: 'confirmar' },
+    { etiqueta: 'Cancelar', transicion: 'cancelar' },
+  ],
+  Confirmada: [
+    { etiqueta: 'Iniciar', transicion: 'iniciar' },
+    { etiqueta: 'Cancelar', transicion: 'cancelar' },
+  ],
+  'En Proceso': [{ etiqueta: 'Completar', transicion: 'completar' }],
+  Completada: [],
+  Cancelada: [],
+};
+
+const CLASES_ESTADO: Record<EstadoCita, string> = {
+  Pendiente: 'estado-pendiente',
+  Confirmada: 'estado-confirmada',
+  'En Proceso': 'estado-en-proceso',
+  Completada: 'estado-completada',
+  Cancelada: 'estado-cancelada',
+};
+
+function mensajeDeError(caught: unknown, fallback: string): string {
+  return caught instanceof Error ? caught.message : fallback;
+}
+
+function ordenarCitas(citas: Cita[]): Cita[] {
+  return [...citas].sort(
+    (primera, segunda) =>
+      new Date(primera.inicio).getTime() - new Date(segunda.inicio).getTime(),
+  );
+}
+
+function coincideConFiltro(cita: Cita, fechaFiltro: string): boolean {
+  if (!fechaFiltro) {
+    return true;
+  }
+
+  const rango = obtenerRangoDiaBogota(fechaFiltro);
+  const inicio = new Date(cita.inicio).getTime();
+  const fin = new Date(cita.fin).getTime();
+
+  return (
+    inicio < new Date(rango.hasta).getTime() &&
+    fin > new Date(rango.desde).getTime()
+  );
+}
+
+export function Citas(): JSX.Element {
+  const [citas, setCitas] = useState<Cita[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [empleados, setEmpleados] = useState<Empleado[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [catalogosCargando, setCatalogosCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [errorAccion, setErrorAccion] = useState<string | null>(null);
+  const [fechaFiltro, setFechaFiltro] = useState('');
+  const [modalAbierto, setModalAbierto] = useState(false);
+  const [operacion, setOperacion] = useState<string | null>(null);
+
+  const [clienteId, setClienteId] = useState('');
+  const [empleadoId, setEmpleadoId] = useState('');
+  const [inicioLocal, setInicioLocal] = useState('');
+  const [finLocal, setFinLocal] = useState('');
+  const [motivo, setMotivo] = useState('');
+
+  useEffect(() => {
+    let activo = true;
+
+    async function cargarAgenda(): Promise<void> {
+      setCargando(true);
+      setError(null);
+
+      try {
+        let ruta = '/api/citas';
+
+        if (fechaFiltro) {
+          const rango = obtenerRangoDiaBogota(fechaFiltro);
+          const parametros = new URLSearchParams({
+            desde: rango.desde,
+            hasta: rango.hasta,
+          });
+          ruta = `${ruta}?${parametros.toString()}`;
+        }
+
+        const citasApi = await obtenerJson<Cita[]>(ruta);
+
+        if (activo) {
+          setCitas(citasApi);
+        }
+      } catch (caught) {
+        if (activo) {
+          setError(mensajeDeError(caught, 'No se pudo cargar la agenda'));
+        }
+      } finally {
+        if (activo) {
+          setCargando(false);
+        }
+      }
+    }
+
+    void cargarAgenda();
+
+    return () => {
+      activo = false;
+    };
+  }, [fechaFiltro]);
+
+  useEffect(() => {
+    let activo = true;
+
+    async function cargarCatalogos(): Promise<void> {
+      setCatalogosCargando(true);
+
+      try {
+        const [clientesApi, empleadosApi] = await Promise.all([
+          obtenerJson<Cliente[]>('/api/clientes'),
+          obtenerJson<Empleado[]>('/api/empleados'),
+        ]);
+
+        if (activo) {
+          setClientes(clientesApi);
+          setEmpleados(empleadosApi);
+        }
+      } catch (caught) {
+        if (activo) {
+          setErrorAccion(
+            mensajeDeError(
+              caught,
+              'No se pudieron cargar los clientes y empleados',
+            ),
+          );
+        }
+      } finally {
+        if (activo) {
+          setCatalogosCargando(false);
+        }
+      }
+    }
+
+    void cargarCatalogos();
+
+    return () => {
+      activo = false;
+    };
+  }, []);
+
+  function abrirModal(): void {
+    setErrorAccion(null);
+    setClienteId('');
+    setEmpleadoId('');
+    setInicioLocal('');
+    setFinLocal('');
+    setMotivo('');
+    setModalAbierto(true);
+  }
+
+  function cerrarModal(): void {
+    if (operacion === 'crear') {
+      return;
+    }
+
+    setModalAbierto(false);
+  }
+
+  async function crearCita(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+
+    if (!clienteId || !empleadoId || !inicioLocal || !finLocal) {
+      setErrorAccion('Completa todos los campos obligatorios.');
+      return;
+    }
+
+    let inicio: string;
+    let fin: string;
+
+    try {
+      inicio = convertirDateTimeLocalAISO(inicioLocal);
+      fin = convertirDateTimeLocalAISO(finLocal);
+    } catch (caught) {
+      setErrorAccion(
+        mensajeDeError(caught, 'Ingresa fechas y horas válidas.'),
+      );
+      return;
+    }
+
+    if (new Date(fin).getTime() <= new Date(inicio).getTime()) {
+      setErrorAccion('La hora final debe ser posterior a la hora inicial.');
+      return;
+    }
+
+    const payload: CrearCitaPayload = {
+      clienteId,
+      empleadoId,
+      inicio,
+      fin,
+      ...(motivo.trim() ? { motivo: motivo.trim() } : {}),
+    };
+
+    setOperacion('crear');
+    setErrorAccion(null);
+
+    try {
+      const cita = await enviarJson<Cita>('/api/citas', 'POST', payload);
+      setCitas((actuales) =>
+        coincideConFiltro(cita, fechaFiltro)
+          ? ordenarCitas([...actuales, cita])
+          : actuales,
+      );
+      setModalAbierto(false);
+    } catch (caught) {
+      setErrorAccion(mensajeDeError(caught, 'No se pudo crear la cita'));
+    } finally {
+      setOperacion(null);
+    }
+  }
+
+  async function transicionarCita(
+    cita: Cita,
+    transicion: TransicionCita,
+  ): Promise<void> {
+    setOperacion(`${cita.id}:${transicion}`);
+    setErrorAccion(null);
+
+    try {
+      const actualizada = await enviarJson<Cita>(
+        `/api/citas/${cita.id}/${transicion}`,
+        'POST',
+        {},
+      );
+      setCitas((actuales) =>
+        actuales.map((actual) =>
+          actual.id === cita.id ? actualizada : actual,
+        ),
+      );
+    } catch (caught) {
+      setErrorAccion(
+        mensajeDeError(caught, 'No se pudo actualizar la cita'),
+      );
+    } finally {
+      setOperacion(null);
+    }
+  }
+
+  const empleadosActivos = empleados.filter((empleado) => empleado.activo);
+
+  return (
+    <div className="pagina">
+      <header className="pagina-header pagina-header-con-accion">
+        <div>
+          <h2>Agenda de citas</h2>
+          <p className="app-description">
+            Reserva y administra citas por empleado. Horarios en America/Bogota
+            (UTC−5).
+          </p>
+        </div>
+        <button
+          type="button"
+          className="boton-primario"
+          onClick={abrirModal}
+          disabled={catalogosCargando || operacion !== null}
+        >
+          Nueva cita
+        </button>
+      </header>
+
+      {error ? (
+        <p role="alert" className="alert alert-error">
+          {error}
+        </p>
+      ) : null}
+
+      {errorAccion && !modalAbierto ? (
+        <p role="alert" className="alert alert-error">
+          {errorAccion}
+        </p>
+      ) : null}
+
+      <section className="app-card" aria-labelledby="agenda-citas-titulo">
+        <div className="seccion-cabecera agenda-filtros">
+          <div>
+            <h3 id="agenda-citas-titulo" className="seccion-titulo">
+              Citas programadas
+            </h3>
+            <p className="app-description">Filtra la agenda por día.</p>
+          </div>
+          <div className="filtro-fecha">
+            <label htmlFor="cita-fecha">Fecha</label>
+            <input
+              id="cita-fecha"
+              type="date"
+              value={fechaFiltro}
+              disabled={operacion !== null}
+              onChange={(event) => setFechaFiltro(event.target.value)}
+            />
+            {fechaFiltro ? (
+              <button
+                type="button"
+                className="boton-secundario boton-compacto"
+                disabled={operacion !== null}
+                onClick={() => setFechaFiltro('')}
+              >
+                Limpiar
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {cargando ? (
+          <p className="app-empty">Cargando agenda…</p>
+        ) : citas.length === 0 ? (
+          <p className="app-empty">No hay citas para mostrar.</p>
+        ) : (
+          <div className="tabla-contenedor citas-tabla-contenedor">
+            <table
+              className="productos-tabla citas-tabla"
+              aria-label="Citas programadas"
+            >
+              <thead>
+                <tr>
+                  <th scope="col">Fecha y hora</th>
+                  <th scope="col">Cliente</th>
+                  <th scope="col">Empleado</th>
+                  <th scope="col">Motivo</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {citas.map((cita) => (
+                  <tr key={cita.id}>
+                    <td>
+                      <span className="cita-fecha">
+                        {formatearFechaHora(cita.inicio)}
+                      </span>
+                      <span className="cita-hora-fin">
+                        hasta {formatearFechaHora(cita.fin)}
+                      </span>
+                    </td>
+                    <td>{cita.clienteNombre}</td>
+                    <td>{cita.empleadoNombre}</td>
+                    <td>{cita.motivo ?? '—'}</td>
+                    <td>
+                      <span
+                        className={`estado-badge ${CLASES_ESTADO[cita.estado]}`}
+                      >
+                        {cita.estado}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="acciones-tabla">
+                        {ACCIONES_POR_ESTADO[cita.estado].map((accion) => {
+                          const clave = `${cita.id}:${accion.transicion}`;
+                          const enCurso = operacion === clave;
+
+                          return (
+                            <button
+                              key={accion.transicion}
+                              type="button"
+                              className="boton-secundario boton-compacto"
+                              disabled={operacion !== null}
+                              onClick={() => {
+                                void transicionarCita(cita, accion.transicion);
+                              }}
+                            >
+                              {enCurso ? '…' : accion.etiqueta}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {modalAbierto ? (
+        <div className="modal-backdrop">
+          <section
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="nueva-cita-titulo"
+          >
+            <div className="modal-header">
+              <h3 id="nueva-cita-titulo" className="seccion-titulo">
+                Nueva cita
+              </h3>
+              <button
+                type="button"
+                className="modal-cerrar"
+                aria-label="Cerrar modal de nueva cita"
+                disabled={operacion === 'crear'}
+                onClick={cerrarModal}
+              >
+                ×
+              </button>
+            </div>
+
+            <form className="cita-form" onSubmit={(event) => void crearCita(event)}>
+              <div className="cita-form-campo">
+                <label htmlFor="cita-cliente">Cliente</label>
+                <select
+                  id="cita-cliente"
+                  value={clienteId}
+                  required
+                  autoFocus
+                  disabled={operacion !== null}
+                  onChange={(event) => setClienteId(event.target.value)}
+                >
+                  <option value="">Selecciona un cliente</option>
+                  {clientes.map((cliente) => (
+                    <option key={cliente.id} value={cliente.id}>
+                      {cliente.nombre} — {cliente.documento}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="cita-form-campo">
+                <label htmlFor="cita-empleado">Empleado</label>
+                <select
+                  id="cita-empleado"
+                  value={empleadoId}
+                  required
+                  disabled={operacion !== null}
+                  onChange={(event) => setEmpleadoId(event.target.value)}
+                >
+                  <option value="">Selecciona un empleado</option>
+                  {empleadosActivos.map((empleado) => (
+                    <option key={empleado.id} value={empleado.id}>
+                      {empleado.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="cita-form-campo">
+                <label htmlFor="cita-inicio">Inicio</label>
+                <input
+                  id="cita-inicio"
+                  type="datetime-local"
+                  value={inicioLocal}
+                  required
+                  disabled={operacion !== null}
+                  onChange={(event) => setInicioLocal(event.target.value)}
+                />
+              </div>
+
+              <div className="cita-form-campo">
+                <label htmlFor="cita-fin">Fin</label>
+                <input
+                  id="cita-fin"
+                  type="datetime-local"
+                  value={finLocal}
+                  required
+                  disabled={operacion !== null}
+                  onChange={(event) => setFinLocal(event.target.value)}
+                />
+              </div>
+
+              <div className="cita-form-campo cita-form-campo-ancho">
+                <label htmlFor="cita-motivo">Motivo</label>
+                <input
+                  id="cita-motivo"
+                  type="text"
+                  value={motivo}
+                  disabled={operacion !== null}
+                  onChange={(event) => setMotivo(event.target.value)}
+                />
+              </div>
+
+              {errorAccion ? (
+                <p role="alert" className="alert alert-error">
+                  {errorAccion}
+                </p>
+              ) : null}
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="boton-secundario"
+                  disabled={operacion === 'crear'}
+                  onClick={cerrarModal}
+                >
+                  Cancelar
+                </button>
+                <button type="submit" disabled={operacion === 'crear'}>
+                  {operacion === 'crear' ? 'Guardando…' : 'Crear cita'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
+    </div>
+  );
+}

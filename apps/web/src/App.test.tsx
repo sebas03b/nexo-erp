@@ -9,6 +9,27 @@ const CLIENTE_ID = '33333333-3333-4333-8333-333333333333';
 const CLIENTE_NOMBRE = 'Cliente de prueba';
 const CLIENTE_DOCUMENTO = '123456789';
 const PRODUCTO_NOMBRE = 'Café de prueba';
+const CITA_ID = '55555555-5555-4555-8555-555555555555';
+
+const citaAgenda = {
+  id: CITA_ID,
+  clienteId: 'cliente-1',
+  clienteNombre: 'Cliente Agenda',
+  empleadoId: 'empleado-1',
+  empleadoNombre: 'Empleado Agenda',
+  inicio: '2026-11-25T15:00:00.000Z',
+  fin: '2026-11-25T16:00:00.000Z',
+  estado: 'Pendiente',
+  motivo: 'Corte y color',
+};
+
+const empleadoAgenda = {
+  id: 'empleado-1',
+  nombre: 'Empleado Agenda',
+  email: 'empleado@prueba.com',
+  telefono: '3000000001',
+  activo: true,
+};
 
 const producto = {
   id: PRODUCTO_ID,
@@ -145,6 +166,14 @@ function instalarFetch(
 
       if (url === '/api/clientes') {
         return Promise.resolve(respuestaJson(opciones.clientes ?? CLIENTES_POR_DEFECTO));
+      }
+
+      if (url === '/api/citas') {
+        return Promise.resolve(respuestaJson([citaAgenda]));
+      }
+
+      if (url === '/api/empleados') {
+        return Promise.resolve(respuestaJson([empleadoAgenda]));
       }
 
       if (url === '/api/clientes/cliente-1' && init?.method === 'PATCH') {
@@ -791,6 +820,27 @@ describe('App', () => {
         'El producto está referenciado por otros registros',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('navega a la agenda de citas y carga sus catálogos', async () => {
+    const fetchMock = instalarFetch();
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('link', { name: 'Citas' }));
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Agenda de citas' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Citas' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(await screen.findByText('Cliente Agenda')).toBeInTheDocument();
+    expect(screen.getByText('Empleado Agenda')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith('/api/citas');
+    expect(fetchMock).toHaveBeenCalledWith('/api/clientes');
+    expect(fetchMock).toHaveBeenCalledWith('/api/empleados');
   });
 
   it('actualiza el canal preferido de un cliente desde la aplicación', async () => {

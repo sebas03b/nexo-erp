@@ -39,6 +39,44 @@ export interface Cliente {
   canalPreferido: CanalPreferido;
 }
 
+export interface Empleado {
+  id: string;
+  nombre: string;
+  email: string | null;
+  telefono: string | null;
+  activo: boolean;
+}
+
+export const ESTADOS_CITA = [
+  'Pendiente',
+  'Confirmada',
+  'En Proceso',
+  'Completada',
+  'Cancelada',
+] as const;
+
+export type EstadoCita = (typeof ESTADOS_CITA)[number];
+
+export interface Cita {
+  id: string;
+  clienteId: string;
+  clienteNombre: string;
+  empleadoId: string;
+  empleadoNombre: string;
+  inicio: string;
+  fin: string;
+  estado: EstadoCita;
+  motivo: string | null;
+}
+
+export interface CrearCitaPayload {
+  clienteId: string;
+  empleadoId: string;
+  inicio: string;
+  fin: string;
+  motivo?: string;
+}
+
 export interface PedidoItem {
   productoId: string;
   productoNombre?: string;
