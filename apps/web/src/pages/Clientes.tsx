@@ -2,7 +2,13 @@ import { useEffect, useState, type FormEvent, type JSX } from 'react';
 
 import { obtenerJson, enviarJson, eliminarRecurso } from '../lib/api';
 import { FiDelete } from 'react-icons/fi';
-import type { CanalPreferido, Cliente } from '../types';
+import {
+  CANALES_NOTIFICACION,
+  esCanalNotificacion,
+  normalizarCanalNotificacion,
+  type CanalPreferido,
+  type Cliente,
+} from '../types';
 
 interface ClienteApi {
   id: string;
@@ -10,7 +16,7 @@ interface ClienteApi {
   documento: string;
   email: string | null;
   telefono: string | null;
-  canal_preferido: CanalPreferido | null;
+  canalPreferido: string | null;
 }
 
 function deApi(cliente: ClienteApi): Cliente {
@@ -20,19 +26,15 @@ function deApi(cliente: ClienteApi): Cliente {
     documento: cliente.documento,
     email: cliente.email,
     telefono: cliente.telefono,
-    canalPreferido: cliente.canal_preferido ?? 'email',
+    canalPreferido: normalizarCanalNotificacion(cliente.canalPreferido),
   };
 }
 
-const CANALES: [CanalPreferido, string][] = [
-  ['email', 'Correo electrónico'],
-  ['sms', 'SMS'],
-  ['whatsapp', 'WhatsApp'],
-];
-
-const ETIQUETAS_CANAL: Record<CanalPreferido, string> = Object.fromEntries(
-  CANALES,
-) as Record<CanalPreferido, string>;
+const ETIQUETAS_CANAL: Record<CanalPreferido, string> = {
+  email: 'Correo electrónico',
+  sms: 'SMS',
+  whatsapp: 'WhatsApp',
+};
 
 export function Clientes(): JSX.Element {
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -324,13 +326,16 @@ export function Clientes(): JSX.Element {
                 <select
                   id="cliente-canal"
                   value={canalPreferido}
-                  onChange={(event) =>
-                    setCanalPreferido(event.target.value as CanalPreferido)
-                  }
+                  onChange={(event) => {
+                    const canal = event.target.value;
+                    if (esCanalNotificacion(canal)) {
+                      setCanalPreferido(canal);
+                    }
+                  }}
                 >
-                  {CANALES.map(([valor, etiqueta]) => (
-                    <option key={valor} value={valor}>
-                      {etiqueta}
+                  {CANALES_NOTIFICACION.map((canal) => (
+                    <option key={canal} value={canal}>
+                      {ETIQUETAS_CANAL[canal]}
                     </option>
                   ))}
                 </select>

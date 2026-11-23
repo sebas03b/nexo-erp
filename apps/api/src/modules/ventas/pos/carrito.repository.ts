@@ -212,7 +212,7 @@ export class CarritoRepository {
       .orderBy('id', 'desc')
       .executeTakeFirst();
 
-    return row ? mapComando(row as CarritoComandoRow) : undefined;
+    return row ? mapComando(row) : undefined;
   }
 
   async marcarComandoDeshecho(executor: Executor, comandoId: string): Promise<void> {

@@ -6,7 +6,7 @@ import type { UnitOfWork } from '../../../shared/db/unit-of-work.js';
 import { DomainError, RecursoNoEncontrado } from '../../../shared/errors/domain-error.js';
 import type { VentasEventMap } from '../domain/eventos.js';
 import { FacturaBuilder } from '../domain/factura.builder.js';
-import { Factura } from '../domain/factura.js';
+import type { Factura } from '../domain/factura.js';
 import { Pedido, type PedidoItem } from '../domain/pedido.js';
 import type { VerificadorClientes } from '../domain/ports.js';
 import type { ResultadoPago } from '../domain/payments/pago.strategy.js';

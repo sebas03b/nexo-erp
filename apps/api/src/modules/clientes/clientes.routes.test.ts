@@ -89,6 +89,25 @@ describe('Clientes API', () => {
     expect(clientes.at(0)?.nombre).toBe('Ana Pérez');
   });
 
+  it('GET /api/clientes normaliza un canal persistido que no es válido', async () => {
+    await db
+      .insertInto('clientes')
+      .values({
+        nombre: 'Cliente histórico',
+        documento: '11111111',
+        email: null,
+        telefono: null,
+        canal_preferido: 'correo',
+      })
+      .execute();
+
+    const listar = await app.inject({ method: 'GET', url: '/api/clientes' });
+
+    expect(listar.statusCode).toBe(200);
+    const clientes = listar.json<Array<{ canalPreferido: string }>>();
+    expect(clientes.at(0)?.canalPreferido).toBe('email');
+  });
+
   it('POST /api/clientes acepta email y teléfono opcionales', async () => {
     const respuesta = await app.inject({
       method: 'POST',

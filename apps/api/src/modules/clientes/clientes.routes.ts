@@ -1,6 +1,7 @@
 import type { FastifyPluginCallback } from 'fastify';
 import { z } from 'zod';
 
+import { CANALES_NOTIFICACION } from '../../shared/types/canal-notificacion.js';
 import type { ClientesRepository } from './clientes.repository.js';
 import { ClientesService } from './clientes.service.js';
 
@@ -13,7 +14,7 @@ const crearClienteSchema = z.object({
     .email('El correo electrónico no es válido')
     .optional(),
   telefono: z.string().trim().min(1, 'El teléfono no puede estar vacío').optional(),
-  canalPreferido: z.enum(['email', 'sms', 'whatsapp']),
+  canalPreferido: z.enum(CANALES_NOTIFICACION),
 });
 
 export interface ClientesRoutesOptions {

@@ -13,6 +13,7 @@ import {
 import logoSidebar from '../assets/logonexo1.png';
 
 interface EnlaceSidebar {
+  id: string;
   to: string;
   etiqueta: string;
   icono: ReactNode;
@@ -20,31 +21,37 @@ interface EnlaceSidebar {
 
 const enlaces: EnlaceSidebar[] = [
   {
+    id: 'ventas',
     to: '/ventas',
     etiqueta: 'Ventas',
     icono: <BiCartAlt size={20} className="mr-2" />,
   },
   {
+    id: 'productos',
     to: '/productos',
     etiqueta: 'Productos y Stock',
     icono: <BiBox size={20} className="mr-2" />,
   },
   {
+    id: 'clientes',
     to: '/clientes',
     etiqueta: 'Clientes',
     icono: <BiGroup size={20} className="mr-2" />,
   },
   {
-    to: '#',
+    id: 'citas',
+    to: '/citas',
     etiqueta: 'Citas',
     icono: <BiCalendar size={20} className="mr-2" />,
   },
   {
+    id: 'contabilidad',
     to: '#',
     etiqueta: 'Contabilidad',
     icono: <BiWallet size={20} className="mr-2" />,
   },
   {
+    id: 'personal',
     to: '#',
     etiqueta: 'Gestión de personal',
     icono: <BiIdCard size={20} className="mr-2" />,
@@ -63,7 +70,7 @@ export function Layout(): JSX.Element {
           <p className="sidebar-seccion">Módulos</p>
           {enlaces.map((enlace) => (
             <NavLink
-              key={enlace.to}
+              key={enlace.id}
               to={enlace.to}
               className={({ isActive }) => {
                 const esFicticio = enlace.to === '#';

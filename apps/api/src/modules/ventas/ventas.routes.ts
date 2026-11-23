@@ -7,7 +7,7 @@ import type { VentasRepository } from './ventas.repository.js';
 import type { CatalogoProductos, VerificadorClientes } from './domain/ports.js';
 import type { CarritoRepository } from './pos/carrito.repository.js';
 import { VentasService, type EstrategiasVentas } from './ventas.service.js';
-import { PosCheckoutFacade } from './pos/pos-checkout.facade.js';
+import type { PosCheckoutFacade } from './pos/pos-checkout.facade.js';
 import type { CheckoutInput } from './pos/pos-checkout.facade.js';
 
 const crearPedidoSchema = z.object({

@@ -59,13 +59,26 @@ function urlDe(input: RequestInfo | URL): string {
   return input.url;
 }
 
+function esObjetoRegistro(valor: unknown): valor is Record<string, unknown> {
+  return typeof valor === 'object' && valor !== null && !Array.isArray(valor);
+}
+
+function cuerpoJson(init?: RequestInit): Record<string, unknown> | null {
+  if (typeof init?.body !== 'string') {
+    return null;
+  }
+
+  const cuerpo: unknown = JSON.parse(init.body);
+  return esObjetoRegistro(cuerpo) ? cuerpo : null;
+}
+
 const CLIENTES_POR_DEFECTO: Array<{
   id: string;
   nombre: string;
   documento: string;
   email: string | null;
   telefono: string | null;
-  canal_preferido: string | null;
+  canalPreferido: string | null;
 }> = [
   {
     id: 'cliente-1',
@@ -73,7 +86,7 @@ const CLIENTES_POR_DEFECTO: Array<{
     documento: '12345678',
     email: 'cliente@prueba.com',
     telefono: '3000000000',
-    canal_preferido: 'whatsapp',
+    canalPreferido: 'whatsapp',
   },
   {
     id: 'cliente-2',
@@ -81,7 +94,7 @@ const CLIENTES_POR_DEFECTO: Array<{
     documento: '87654321',
     email: null,
     telefono: null,
-    canal_preferido: 'email',
+    canalPreferido: 'email',
   },
 ];
 
@@ -97,7 +110,7 @@ function instalarFetch(
       documento: string;
       email: string | null;
       telefono: string | null;
-      canal_preferido: string | null;
+      canalPreferido: string | null;
     }>;
   } = {},
 ): ReturnType<typeof vi.fn> {
@@ -177,9 +190,10 @@ function instalarFetch(
       }
 
       if (carritoActual && url === `/api/carritos/${carritoActual.id}/comandos` && init?.method === 'POST') {
-        const body = init?.body ? JSON.parse(init.body as string) as { accion: string; payload: Record<string, unknown> } : null;
+        const body = cuerpoJson(init);
         if (!body) return Promise.resolve(respuestaJson({ error: { message: 'Datos inválidos' } }, 400));
-        const { accion, payload } = body;
+        const accion = typeof body.accion === 'string' ? body.accion : '';
+        const payload = esObjetoRegistro(body.payload) ? body.payload : {};
         const productoId = String(payload.productoId);
         const cantidad = Number(payload.cantidad ?? 0);
         const existente = carritoActual.items.find((i) => i.productoId === productoId) ?? null;
@@ -235,7 +249,7 @@ function instalarFetch(
       }
 
       if (url === '/api/pedidos' && init?.method === 'POST') {
-        const body = init?.body ? JSON.parse(init.body as string) : null;
+        const body = cuerpoJson(init);
         return Promise.resolve(
           respuestaJson({ ...pedidoPagado, estado: 'Borrador', total: carritoActual?.total ?? 100, carritoId: body?.carritoId }, 201),
         );
@@ -269,7 +283,7 @@ function instalarFetch(
       }
 
       if (url === '/api/ventas/checkout' && init?.method === 'POST') {
-        const body = init?.body ? JSON.parse(init.body as string) : null;
+        const body = cuerpoJson(init);
         return Promise.resolve(
           respuestaJson({
             pedido: { ...pedidoPagado, id: PEDIDO_ID, estado: 'Pagado', total: carritoActual?.total ?? 100 },
@@ -791,5 +805,6 @@ describe('App', () => {
       'aria-current',
       'page',
     );
+    expect(await screen.findByText('WhatsApp')).toBeInTheDocument();
   });
 });

@@ -1,7 +1,7 @@
 // Patrón: Command
 
 import type { Comando } from './comando.js';
-import { Carrito, type ItemCarrito } from './carrito.js';
+import type { Carrito, ItemCarrito } from './carrito.js';
 
 export class DecrementarItemCommand implements Comando {
   #carrito: Carrito;
@@ -24,9 +24,9 @@ export class DecrementarItemCommand implements Comando {
     this.#ejecutado = ejecutado ?? estadoAnterior !== undefined;
   }
 
-  async ejecutar(): Promise<void> {
+  ejecutar(): Promise<void> {
     if (this.#ejecutado) {
-      return;
+      return Promise.resolve();
     }
 
     const existente = this.#carrito.obtenerItem(this.#productoId);
@@ -34,16 +34,17 @@ export class DecrementarItemCommand implements Comando {
 
     if (!existente) {
       this.#ejecutado = true;
-      return;
+      return Promise.resolve();
     }
 
     this.#carrito.restarCantidad(this.#productoId, this.#cantidad);
     this.#ejecutado = true;
+    return Promise.resolve();
   }
 
-  async deshacer(): Promise<void> {
+  deshacer(): Promise<void> {
     if (!this.#ejecutado) {
-      return;
+      return Promise.resolve();
     }
 
     if (this.#itemAnterior) {
@@ -51,6 +52,7 @@ export class DecrementarItemCommand implements Comando {
     }
 
     this.#ejecutado = false;
+    return Promise.resolve();
   }
 
   obtenerEstadoAnterior(): ItemCarrito | null | undefined {

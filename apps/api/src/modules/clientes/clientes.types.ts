@@ -1,4 +1,6 @@
-export type CanalPreferido = 'email' | 'sms' | 'whatsapp';
+import type { CanalNotificacion } from '../../shared/types/canal-notificacion.js';
+
+export type CanalPreferido = CanalNotificacion;
 
 export interface Cliente {
   id: string;

@@ -5,7 +5,8 @@ import {
   type TraduccionesErrorBd,
 } from '../../shared/db/errores-postgres.js';
 import type { Database } from '../../shared/db/schema.js';
-import type { CanalPreferido, Cliente, CrearClienteData } from './clientes.types.js';
+import { normalizarCanalNotificacion } from '../../shared/types/canal-notificacion.js';
+import type { Cliente, CrearClienteData } from './clientes.types.js';
 
 const TRADUCCIONES_CLIENTE: TraduccionesErrorBd = {
   '23505': {
@@ -40,7 +41,7 @@ function mapCliente(row: ClienteRow): Cliente {
     documento: row.documento,
     email: row.email ?? undefined,
     telefono: row.telefono ?? undefined,
-    canalPreferido: (row.canal_preferido ?? 'email') as CanalPreferido,
+    canalPreferido: normalizarCanalNotificacion(row.canal_preferido),
   };
 }
 

@@ -1,7 +1,7 @@
 // Patrón: Command
 
 import type { Comando } from './comando.js';
-import { Carrito, type ItemCarrito } from './carrito.js';
+import type { Carrito, ItemCarrito } from './carrito.js';
 
 export class QuitarItemCommand implements Comando {
   #carrito: Carrito;
@@ -21,23 +21,25 @@ export class QuitarItemCommand implements Comando {
     this.#ejecutado = ejecutado ?? itemRemovido !== undefined;
   }
 
-  async ejecutar(): Promise<void> {
+  ejecutar(): Promise<void> {
     if (this.#ejecutado) {
-      return;
+      return Promise.resolve();
     }
 
     const removido = this.#carrito.quitarItem(this.#productoId);
     this.#itemRemovido = removido ? { ...removido } : undefined;
     this.#ejecutado = true;
+    return Promise.resolve();
   }
 
-  async deshacer(): Promise<void> {
+  deshacer(): Promise<void> {
     if (!this.#ejecutado || !this.#itemRemovido) {
-      return;
+      return Promise.resolve();
     }
 
     this.#carrito.restaurarItem(this.#itemRemovido);
     this.#ejecutado = false;
+    return Promise.resolve();
   }
 
   obtenerItemRemovido(): ItemCarrito | undefined {
