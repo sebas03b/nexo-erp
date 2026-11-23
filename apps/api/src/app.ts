@@ -4,8 +4,17 @@ import type { Kysely } from 'kysely';
 import { ZodError } from 'zod';
 
 import { env } from './config/env.js';
+import { CitasRepository } from './modules/citas/citas.repository.js';
+import { citasRoutes } from './modules/citas/citas.routes.js';
+import { CitasService } from './modules/citas/citas.service.js';
+import type {
+  ConsultorEmpleadosParaCita,
+  VerificadorClienteParaCita,
+} from './modules/citas/ports.js';
 import { ClientesRepository } from './modules/clientes/clientes.repository.js';
 import { clientesRoutes } from './modules/clientes/clientes.routes.js';
+import { EmpleadosRepository } from './modules/empleados/empleados.repository.js';
+import { empleadosRoutes } from './modules/empleados/empleados.routes.js';
 import { InventarioRepository } from './modules/inventario/inventario.repository.js';
 import { inventarioRoutes } from './modules/inventario/inventario.routes.js';
 import type { AppEventMap } from './shared/events/event-map.js';
@@ -106,6 +115,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   }));
 
   const inventarioRepository = new InventarioRepository(db);
+  const clientesRepository = new ClientesRepository(db);
+  const empleadosRepository = new EmpleadosRepository(db);
+  const citasRepository = new CitasRepository(db);
   const eventBus = new InMemoryEventBus<AppEventMap>();
   const unitOfWork = new UnitOfWork<AppEventMap>(db, eventBus);
 
@@ -124,6 +136,23 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       return cliente ?? null;
     },
   };
+
+  const clientesParaCita: VerificadorClienteParaCita = {
+    existe: async (clienteId) =>
+      (await clientesRepository.obtenerCliente(clienteId)) !== undefined,
+  };
+
+  const empleadosParaCita: ConsultorEmpleadosParaCita = {
+    obtenerEmpleado: (empleadoId, executor) =>
+      empleadosRepository.obtenerEmpleadoParaCita(executor, empleadoId),
+  };
+
+  const citasService = new CitasService(
+    citasRepository,
+    unitOfWork,
+    clientesParaCita,
+    empleadosParaCita,
+  );
 
   const estrategiasVentas: EstrategiasVentas = options.estrategiasVentas ?? {
     descuento: new DescuentoPorVolumen(),
@@ -160,9 +189,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   );
 
   await app.register(inventarioRoutes, { repository: inventarioRepository });
-  await app.register(clientesRoutes, {
-    repository: new ClientesRepository(db),
-  });
+  await app.register(clientesRoutes, { repository: clientesRepository });
+  await app.register(empleadosRoutes, { repository: empleadosRepository });
+  await app.register(citasRoutes, { service: citasService });
   await app.register(carritoRoutes, { service: carritoService });
   await app.register(ventasRoutes, {
     repository: ventasRepository,

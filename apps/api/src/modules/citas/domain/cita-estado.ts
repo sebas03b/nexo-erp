@@ -2,12 +2,15 @@
 
 import { DomainError } from '../../../shared/errors/domain-error.js';
 
-export type EstadoCita =
-  | 'Pendiente'
-  | 'Confirmada'
-  | 'En Proceso'
-  | 'Completada'
-  | 'Cancelada';
+export const ESTADOS_CITA = [
+  'Pendiente',
+  'Confirmada',
+  'En Proceso',
+  'Completada',
+  'Cancelada',
+] as const;
+
+export type EstadoCita = (typeof ESTADOS_CITA)[number];
 
 export abstract class CitaEstado {
   abstract readonly nombre: EstadoCita;

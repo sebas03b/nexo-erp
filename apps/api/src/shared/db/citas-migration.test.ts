@@ -38,7 +38,7 @@ describe('Migración de Citas y Empleados', () => {
     await db.destroy();
   });
 
-  it('crea las tablas de la agenda y revierte la migración 0006', async () => {
+  it('crea la agenda, aplica sus restricciones y revierte la migración 0006', async () => {
     const tablas = await sql<{ tabla: string | null }>`
       select to_regclass('citas')::text as tabla
     `.execute(db);
@@ -48,6 +48,75 @@ describe('Migración de Citas y Empleados', () => {
 
     expect(tablas.rows.at(0)?.tabla).toBe('citas');
     expect(empleados.rows.at(0)?.tabla).toBe('empleados');
+
+    const cliente = await db
+      .insertInto('clientes')
+      .values({
+        nombre: 'Cliente de migración',
+        documento: 'migracion-1',
+        email: null,
+        telefono: null,
+        canal_preferido: 'email',
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    const empleado = await db
+      .insertInto('empleados')
+      .values({
+        nombre: 'Empleado de migración',
+        email: null,
+        telefono: null,
+        activo: true,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+
+    const inicio = new Date('2026-11-25T15:00:00.000Z');
+    const fin = new Date('2026-11-25T16:00:00.000Z');
+    const cita = await db
+      .insertInto('citas')
+      .values({
+        cliente_id: cliente.id,
+        empleado_id: empleado.id,
+        inicio,
+        fin,
+        motivo: null,
+      })
+      .returning(['estado', 'creado_en', 'actualizado_en'])
+      .executeTakeFirstOrThrow();
+
+    expect(cita.estado).toBe('Pendiente');
+    expect(cita.creado_en).toBeInstanceOf(Date);
+    expect(cita.actualizado_en).toBeInstanceOf(Date);
+
+    await expect(
+      sql`
+        insert into citas (cliente_id, empleado_id, inicio, fin, estado)
+        values (${cliente.id}, ${empleado.id}, ${inicio}, ${fin}, 'Inventado')
+      `.execute(db),
+    ).rejects.toThrow();
+    await expect(
+      sql`
+        insert into citas (cliente_id, empleado_id, inicio, fin)
+        values (${cliente.id}, ${empleado.id}, ${fin}, ${inicio})
+      `.execute(db),
+    ).rejects.toThrow();
+    await expect(
+      db.deleteFrom('empleados').where('id', '=', empleado.id).execute(),
+    ).rejects.toThrow();
+
+    const indices = await sql<{ indexname: string }>`
+      select indexname
+      from pg_indexes
+      where tablename = 'citas'
+    `.execute(db);
+    expect(indices.rows.map((row) => row.indexname)).toEqual(
+      expect.arrayContaining([
+        'citas_agenda_idx',
+        'citas_cliente_idx',
+        'citas_estado_idx',
+      ]),
+    );
 
     const { error } = await migrator.migrateDown();
     if (error) {
@@ -59,7 +128,11 @@ describe('Migración de Citas y Empleados', () => {
     const tablasRevertidas = await sql<{ tabla: string | null }>`
       select to_regclass('citas')::text as tabla
     `.execute(db);
+    const empleadosRevertidos = await sql<{ tabla: string | null }>`
+      select to_regclass('empleados')::text as tabla
+    `.execute(db);
 
     expect(tablasRevertidas.rows.at(0)?.tabla).toBeNull();
+    expect(empleadosRevertidos.rows.at(0)?.tabla).toBeNull();
   });
 });

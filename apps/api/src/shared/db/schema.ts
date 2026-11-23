@@ -112,7 +112,7 @@ export interface CitasTable {
   empleado_id: string;
   inicio: Date;
   fin: Date;
-  estado: EstadoCitaPersistido;
+  estado: Generated<EstadoCitaPersistido>;
   motivo: string | null;
   creado_en: Generated<Date>;
   actualizado_en: Generated<Date>;
