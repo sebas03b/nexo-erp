@@ -45,7 +45,10 @@ describe('Clientes API', () => {
   });
 
   beforeEach(async () => {
+    await db.deleteFrom('citas').execute();
+    await db.deleteFrom('empleados').execute();
     await db.deleteFrom('clientes').execute();
+    await db.deleteFrom('outbox_events').execute();
   });
 
   it('GET /api/clientes devuelve la lista de clientes vacía al inicio', async () => {

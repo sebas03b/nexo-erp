@@ -30,6 +30,27 @@ const CLIENTES = [
   },
 ];
 
+const EMPLEADOS = [
+  {
+    nombre: 'Laura Pérez',
+    email: 'lauraperez@email.com',
+    telefono: '3001112233',
+    activo: true,
+  },
+  {
+    nombre: 'Mateo Rojas',
+    email: 'mateorojas@email.com',
+    telefono: '3014445566',
+    activo: true,
+  },
+  {
+    nombre: 'Sofía Navarro',
+    email: 'sofianavarro@email.com',
+    telefono: '3027778899',
+    activo: true,
+  },
+];
+
 const PRODUCTOS = [
   { sku: 'BEL-001', nombre: 'Shampoo Kérastase Nutritive 250ml', precio: 129900, tipo: 'producto' },
   { sku: 'BEL-002', nombre: 'Mascarilla Capilar Olaplex N°3 100ml', precio: 149900, tipo: 'producto' },
@@ -43,16 +64,33 @@ const PRODUCTOS = [
 
 const STOCK_POR_PRODUCTO = [30, 20, 60, 25, 0, 0, 0, 0];
 
+function crearInicioDemo(): Date {
+  const inicio = new Date();
+  inicio.setHours(14, 0, 0, 0);
+
+  if (inicio.getTime() <= Date.now()) {
+    inicio.setDate(inicio.getDate() + 1);
+  }
+
+  return inicio;
+}
+
 async function main(): Promise<void> {
   try {
     console.log('Limpiando tablas de inventario y clientes…');
 
-    await db.deleteFrom('pedido_items').execute();
+    await db.deleteFrom('citas').execute();
+    await db.deleteFrom('empleados').execute();
     await db.deleteFrom('facturas').execute();
+    await db.deleteFrom('pedido_items').execute();
     await db.deleteFrom('pedidos').execute();
+    await db.deleteFrom('carrito_comandos').execute();
+    await db.deleteFrom('carrito_items').execute();
+    await db.deleteFrom('carritos').execute();
     await db.deleteFrom('stock').execute();
     await db.deleteFrom('productos').execute();
     await db.deleteFrom('clientes').execute();
+    await db.deleteFrom('outbox_events').execute();
 
     console.log('Insertando clientes…');
 
@@ -67,6 +105,51 @@ async function main(): Promise<void> {
     );
     for (const cliente of clientesInsertados) {
       console.log(`   - ${cliente.nombre} (${cliente.documento})`);
+    }
+
+    console.log('Insertando empleados…');
+
+    const empleadosInsertados = await db
+      .insertInto('empleados')
+      .values(EMPLEADOS)
+      .returning(['id', 'nombre'])
+      .execute();
+
+    for (const empleado of empleadosInsertados) {
+      console.log(`   - ${empleado.nombre}`);
+    }
+
+    const clienteDemo = clientesInsertados[0];
+    const empleadoDemo = empleadosInsertados[0];
+    const inicioDemo = crearInicioDemo();
+    const finDemo = new Date(inicioDemo.getTime() + 60 * 60 * 1000);
+    const inicioDemoSecundario = new Date(finDemo.getTime());
+    const finDemoSecundario = new Date(inicioDemoSecundario.getTime() + 60 * 60 * 1000);
+
+    if (clienteDemo && empleadoDemo) {
+      console.log('Insertando citas de demostración…');
+
+      await db
+        .insertInto('citas')
+        .values([
+          {
+            cliente_id: clienteDemo.id,
+            empleado_id: empleadoDemo.id,
+            inicio: inicioDemo,
+            fin: finDemo,
+            estado: 'Pendiente',
+            motivo: 'Corte y color',
+          },
+          {
+            cliente_id: clienteDemo.id,
+            empleado_id: empleadoDemo.id,
+            inicio: inicioDemoSecundario,
+            fin: finDemoSecundario,
+            estado: 'Confirmada',
+            motivo: 'Manicure semipermanente',
+          },
+        ])
+        .execute();
     }
 
     console.log('Insertando productos y stock…');

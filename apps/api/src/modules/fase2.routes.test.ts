@@ -89,7 +89,8 @@ describe('Endpoints REST de inventario y ventas', () => {
   });
 
   beforeEach(async () => {
-    await db.deleteFrom('outbox_events').execute();
+    await db.deleteFrom('citas').execute();
+    await db.deleteFrom('empleados').execute();
     await db.deleteFrom('facturas').execute();
     await db.deleteFrom('pedido_items').execute();
     await db.deleteFrom('pedidos').execute();
@@ -99,6 +100,7 @@ describe('Endpoints REST de inventario y ventas', () => {
     await db.deleteFrom('stock').execute();
     await db.deleteFrom('productos').execute();
     await db.deleteFrom('clientes').execute();
+    await db.deleteFrom('outbox_events').execute();
     await sql`alter sequence facturas_numero_seq restart with 1`.execute(db);
 
     const cliente = await db

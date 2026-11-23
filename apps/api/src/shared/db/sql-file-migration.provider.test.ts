@@ -9,7 +9,7 @@ const MIGRATIONS_DIRECTORY = fileURLToPath(
 );
 
 describe('SqlFileMigrationProvider', () => {
-  it('carga la migración inicial con sus scripts up y down', async () => {
+  it('carga las migraciones con sus scripts up y down', async () => {
     const provider = new SqlFileMigrationProvider(MIGRATIONS_DIRECTORY);
 
     const migrations = await provider.getMigrations();
@@ -20,6 +20,7 @@ describe('SqlFileMigrationProvider', () => {
       '0003_inventario_pedidos',
       '0004_pedidos_created_at',
       '0005_carritos',
+      '0006_citas',
     ]);
     expect(typeof migrations['0002_outbox_events']?.up).toBe('function');
     expect(typeof migrations['0002_outbox_events']?.down).toBe('function');
@@ -29,5 +30,7 @@ describe('SqlFileMigrationProvider', () => {
     expect(typeof migrations['0004_pedidos_created_at']?.down).toBe('function');
     expect(typeof migrations['0005_carritos']?.up).toBe('function');
     expect(typeof migrations['0005_carritos']?.down).toBe('function');
+    expect(typeof migrations['0006_citas']?.up).toBe('function');
+    expect(typeof migrations['0006_citas']?.down).toBe('function');
   });
 });

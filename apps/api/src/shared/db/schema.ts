@@ -91,6 +91,33 @@ export interface CarritoComandosTable {
   creado_en: Generated<Date>;
 }
 
+export type EstadoCitaPersistido =
+  | 'Pendiente'
+  | 'Confirmada'
+  | 'En Proceso'
+  | 'Completada'
+  | 'Cancelada';
+
+export interface EmpleadosTable {
+  id: Generated<string>;
+  nombre: string;
+  email: string | null;
+  telefono: string | null;
+  activo: Generated<boolean>;
+}
+
+export interface CitasTable {
+  id: Generated<string>;
+  cliente_id: string;
+  empleado_id: string;
+  inicio: Date;
+  fin: Date;
+  estado: EstadoCitaPersistido;
+  motivo: string | null;
+  creado_en: Generated<Date>;
+  actualizado_en: Generated<Date>;
+}
+
 export interface Database {
   usuarios: UsuariosTable;
   clientes: ClientesTable;
@@ -103,4 +130,6 @@ export interface Database {
   carritos: CarritosTable;
   carrito_items: CarritoItemsTable;
   carrito_comandos: CarritoComandosTable;
+  empleados: EmpleadosTable;
+  citas: CitasTable;
 }
