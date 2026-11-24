@@ -2,6 +2,7 @@ import type { JSX, ReactNode } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 
 import {
+  BiCalculator,
   BiCartAlt,
   BiBox,
   BiGroup,
@@ -46,9 +47,15 @@ const enlaces: EnlaceSidebar[] = [
   },
   {
     id: 'contabilidad',
-    to: '#',
+    to: '/contabilidad',
     etiqueta: 'Contabilidad',
     icono: <BiWallet size={20} className="mr-2" />,
+  },
+  {
+    id: 'nomina',
+    to: '/nomina',
+    etiqueta: 'Nómina',
+    icono: <BiCalculator size={20} className="mr-2" />,
   },
   {
     id: 'personal',

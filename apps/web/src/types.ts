@@ -113,3 +113,72 @@ export interface Carrito {
   impuesto: number;
   total: number;
 }
+
+export interface Caja {
+  id: string;
+  usuarioId: string;
+  apertura: string;
+  cierre: string | null;
+  montoInicial: number;
+  montoFinal: number | null;
+}
+
+export interface Asiento {
+  id: string;
+  fecha: string;
+  cuenta: string;
+  debito: number;
+  credito: number;
+  origenId: string;
+  metodoPago: string | null;
+  descripcion: string | null;
+  createdAt: string;
+}
+
+export interface ResumenVentaDato {
+  clave: string;
+  total: number;
+  cantidad: number;
+}
+
+export interface ResumenVentas {
+  totalVentas: number;
+  cantidadVentas: number;
+  agrupacion: string;
+  datos: ResumenVentaDato[];
+  productosServicios: Array<{
+    productoId: string;
+    nombre: string;
+    tipo: string;
+    cantidad: number;
+    total: number;
+  }>;
+}
+
+export type AgrupacionVentas = 'dia' | 'mes' | 'anio' | 'medio_pago';
+
+export interface ConceptoNomina {
+  id: string;
+  codigo: string;
+  nombre: string;
+  tipo: 'devengo' | 'deduccion';
+  activo: boolean;
+}
+
+export interface ResultadoConcepto {
+  codigo: string;
+  nombre: string;
+  tipo: 'devengo' | 'deduccion';
+  valor: number;
+}
+
+export interface LiquidacionResultado {
+  id: string;
+  empleadoId: string;
+  periodo: string;
+  salarioBase: number;
+  totalDevengos: number;
+  totalDeducciones: number;
+  netoAPagar: number;
+  conceptos: ResultadoConcepto[];
+}
