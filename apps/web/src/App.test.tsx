@@ -29,6 +29,8 @@ const pedidoPagado = {
   impuesto: 0,
   total: 200,
   createdAt: '2026-11-08T01:05:00.000Z',
+  payloadExterno:
+    '<Invoice><CUFE>CUFE-FAC-000001-20000</CUFE><AmountCents>20000</AmountCents></Invoice>',
   items: [
     {
       productoId: PRODUCTO_ID,
@@ -282,6 +284,12 @@ function instalarFetch(
         return Promise.resolve(respuestaJson({ ...pedidoPagado, estado: 'Pagado', total: 100 }));
       }
 
+      if (url === `/api/pedidos/${PEDIDO_ID}/factura` && init?.method === 'POST') {
+        return Promise.resolve(
+          respuestaJson({ ...pedidoPagado, payloadExterno: pedidoPagado.payloadExterno }, 201),
+        );
+      }
+
       if (url === '/api/ventas/checkout' && init?.method === 'POST') {
         const body = init?.body ? (JSON.parse(init.body as string) as { metodoPago?: string }) : null;
         return Promise.resolve(
@@ -385,6 +393,15 @@ describe('App', () => {
     expect(within(items).queryByText(PRODUCTO_ID)).not.toBeInTheDocument();
     expect(within(items).getByText('2')).toBeInTheDocument();
     expect(within(items).getByText(/\$\s*100(?:[.,]00)?/)).toBeInTheDocument();
+    expect(
+      within(dialogo).getByRole('heading', {
+        level: 4,
+        name: 'XML Facturación Electrónica (Adapter)',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialogo).getByText(/CUFE-FAC-000001-20000/),
+    ).toHaveClass('bg-slate-950');
 
     fireEvent.click(within(dialogo).getByRole('button', { name: 'Cerrar' }));
 

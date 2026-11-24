@@ -49,7 +49,7 @@ interface FacturaJson {
   pedidoId: string;
   numero: string;
   estado: string;
-  payloadExterno: object | null;
+  payloadExterno: string | null;
 }
 
 const DOCUMENTO_CLIENTE = '123456789';
@@ -405,12 +405,30 @@ describe('Endpoints REST de inventario y ventas', () => {
       pedidoId: pedido.id,
       numero: 'FAC-000001',
       estado: 'Emitida',
-      payloadExterno: null,
     });
+    expect(factura.json<FacturaJson>().payloadExterno).toContain(
+      '<AmountCents>20000</AmountCents>',
+    );
 
     const facturas = await app.inject({ method: 'GET', url: '/api/facturas' });
     expect(facturas.statusCode).toBe(200);
-    expect(facturas.json<FacturaJson[]>()).toHaveLength(1);
+    const facturasJson = facturas.json<FacturaJson[]>();
+    expect(facturasJson).toHaveLength(1);
+    expect(facturasJson[0]).toMatchObject({
+      pedidoId: pedido.id,
+      numero: 'FAC-000001',
+      estado: 'Emitida',
+    });
+    expect(facturasJson[0]?.payloadExterno).toContain('<AmountCents>20000</AmountCents>');
+
+    const detalleFacturado = await app.inject({
+      method: 'GET',
+      url: `/api/pedidos/${pedido.id}`,
+    });
+    expect(detalleFacturado.statusCode).toBe(200);
+    expect(detalleFacturado.json<{ payloadExterno: string | null }>().payloadExterno).toBe(
+      facturasJson[0]?.payloadExterno,
+    );
 
     const facturaDuplicada = await app.inject({
       method: 'POST',

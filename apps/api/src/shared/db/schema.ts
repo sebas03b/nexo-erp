@@ -63,7 +63,7 @@ export interface FacturasTable {
   pedido_id: string;
   numero: string;
   estado: string;
-  payload_externo: ColumnType<object | null, string | null, string | null>;
+  payload_externo: string | null;
 }
 
 export interface CarritosTable {

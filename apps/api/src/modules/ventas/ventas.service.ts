@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
+import type { FacturacionElectronicaPort } from '../../integrations/facturacion-electronica/facturacion.port.js';
 import type {
   UnitOfWork,
   UnitOfWorkContext,
 } from '../../shared/db/unit-of-work.js';
 import { DomainError, RecursoNoEncontrado } from '../../shared/errors/domain-error.js';
 import type { AppEventMap } from '../../shared/events/app-event-map.js';
+import { FacturaBuilder } from './domain/factura.builder.js';
 import { Factura } from './domain/factura.js';
 import { Pedido, type PedidoItem } from './domain/pedido.js';
 import type { PedidoDetalle } from './domain/pedido-detalle.js';
@@ -42,6 +44,7 @@ export class VentasService {
   readonly #clientes: VerificadorClientes;
   readonly #estrategias: EstrategiasVentas;
   readonly #carritoRepository: CarritoRepository;
+  readonly #facturacion: FacturacionElectronicaPort;
 
   constructor(
     repository: VentasRepository,
@@ -49,12 +52,14 @@ export class VentasService {
     clientes: VerificadorClientes,
     estrategias: EstrategiasVentas,
     carritoRepository: CarritoRepository,
+    facturacion: FacturacionElectronicaPort,
   ) {
     this.#repository = repository;
     this.#unitOfWork = unitOfWork;
     this.#clientes = clientes;
     this.#estrategias = estrategias;
     this.#carritoRepository = carritoRepository;
+    this.#facturacion = facturacion;
   }
 
   async crearPedido(data: CrearPedidoInput): Promise<Pedido> {
@@ -213,14 +218,7 @@ export class VentasService {
       });
     }
 
-    return this.#unitOfWork.execute(async ({ db }) => {
-      const numero = await this.#repository.siguienteNumeroFactura(db);
-      const factura = Factura.emitirPara(pedido, { id: randomUUID(), numero });
-
-      await this.#repository.crearFactura(db, factura);
-
-      return factura;
-    });
+    return this.#unitOfWork.execute(async ({ db }) => this.#emitirFactura(db, pedido));
   }
 
   listarFacturas(): Promise<Factura[]> {
@@ -233,6 +231,39 @@ export class VentasService {
     if (!factura) {
       throw new RecursoNoEncontrado('FACTURA_NO_ENCONTRADA', 'Factura no encontrada');
     }
+
+    return factura;
+  }
+
+  async #emitirFactura(db: VentasTransaction, pedido: Pedido): Promise<Factura> {
+    const cliente = await db
+      .selectFrom('clientes')
+      .select(['nombre', 'documento'])
+      .where('id', '=', pedido.clienteId)
+      .executeTakeFirst();
+
+    if (!cliente) {
+      throw new RecursoNoEncontrado('CLIENTE_NO_ENCONTRADO', 'Cliente no encontrado');
+    }
+
+    const numero = await this.#repository.siguienteNumeroFactura(db);
+    const electronica = await this.#facturacion.emitir({
+      numeroFactura: numero,
+      clienteNombre: cliente.nombre,
+      clienteDocumento: cliente.documento,
+      total: pedido.total,
+      fechaIso: new Date().toISOString(),
+    });
+
+    const factura = new FacturaBuilder()
+      .conId(randomUUID())
+      .conPedidoId(pedido.id)
+      .conNumero(numero)
+      .conEstado('Emitida')
+      .conPayloadExterno(electronica.xml)
+      .construir();
+
+    await this.#repository.crearFactura(db, factura);
 
     return factura;
   }

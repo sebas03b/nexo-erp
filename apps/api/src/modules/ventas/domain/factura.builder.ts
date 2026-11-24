@@ -8,7 +8,7 @@ export class FacturaBuilder {
   private pedidoId?: string;
   private numero?: string;
   private estado?: string;
-  private payloadExterno: object | null = null;
+  private payloadExterno: string | null = null;
 
   conId(id: string): this {
     this.id = id;
@@ -30,7 +30,7 @@ export class FacturaBuilder {
     return this;
   }
 
-  conPayloadExterno(payload: object | null): this {
+  conPayloadExterno(payload: string | null): this {
     this.payloadExterno = payload;
     return this;
   }

@@ -2,6 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 
+import type { FacturacionElectronicaPort } from '../../../integrations/facturacion-electronica/facturacion.port.js';
 import type { UnitOfWork } from '../../../shared/db/unit-of-work.js';
 import { DomainError, RecursoNoEncontrado } from '../../../shared/errors/domain-error.js';
 import type { AppEventMap } from '../../../shared/events/app-event-map.js';
@@ -41,6 +42,7 @@ export class PosCheckoutFacade {
       productoId: string,
       cantidad: number,
     ) => Promise<boolean>,
+    private readonly facturacion: FacturacionElectronicaPort,
   ) {}
 
   async checkout(input: CheckoutInput): Promise<CheckoutResultado> {
@@ -126,7 +128,7 @@ export class PosCheckoutFacade {
 
       const cliente = await context.db
         .selectFrom('clientes')
-        .select('id')
+        .select(['id', 'nombre', 'documento'])
         .where('documento', '=', input.documentoCliente.trim())
         .executeTakeFirst();
 
@@ -208,11 +210,19 @@ export class PosCheckoutFacade {
       });
 
       const numero = await this.repository.siguienteNumeroFactura(context.db);
+      const electronica = await this.facturacion.emitir({
+        numeroFactura: numero,
+        clienteNombre: cliente.nombre,
+        clienteDocumento: cliente.documento,
+        total: pedido.total,
+        fechaIso: new Date().toISOString(),
+      });
       const factura = new FacturaBuilder()
         .conId(randomUUID())
         .conPedidoId(pedido.id)
         .conNumero(numero)
         .conEstado('Emitida')
+        .conPayloadExterno(electronica.xml)
         .construir();
 
       await this.repository.crearFactura(context.db, factura);

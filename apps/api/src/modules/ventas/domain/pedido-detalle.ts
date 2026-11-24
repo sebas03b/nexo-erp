@@ -18,5 +18,6 @@ export interface PedidoDetalle {
   impuesto: number;
   total: number;
   createdAt: string;
+  payloadExterno: string | null;
   items: PedidoItemDetalle[];
 }

@@ -4,6 +4,7 @@ import type { Kysely } from 'kysely';
 import { ZodError } from 'zod';
 
 import { env } from './config/env.js';
+import { FacturacionXmlAdapter } from './integrations/facturacion-electronica/facturacion-xml.adapter.js';
 import { ClientesRepository } from './modules/clientes/clientes.repository.js';
 import { clientesRoutes } from './modules/clientes/clientes.routes.js';
 import { InventarioRepository } from './modules/inventario/inventario.repository.js';
@@ -159,6 +160,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   const ventasRepository = new VentasRepository(db);
   const carritoRepository = new CarritoRepository(db);
+  const facturacionElectronica = new FacturacionXmlAdapter();
   const carritoService = new CarritoService(
     db,
     carritoRepository,
@@ -180,6 +182,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       const stock = await inventarioRepository.obtenerStock(productoId);
       return stock !== undefined && stock.cantidad >= cantidad;
     },
+    facturacionElectronica,
   );
 
   const citasRepository = new CitasRepository();
@@ -198,6 +201,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     estrategias: estrategiasVentas,
     facade: posCheckoutFacade,
     carritoRepository,
+    facturacion: facturacionElectronica,
   });
   await app.register(citasRoutes, { service: citasService });
 

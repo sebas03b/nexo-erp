@@ -22,6 +22,7 @@ describe('SqlFileMigrationProvider', () => {
       '0005_carritos',
       '0006_citas',
       '0007_carrito_items_lineas',
+      '0007_factura_payload_externo',
     ]);
     expect(typeof migrations['0002_outbox_events']?.up).toBe('function');
     expect(typeof migrations['0002_outbox_events']?.down).toBe('function');
@@ -33,5 +34,7 @@ describe('SqlFileMigrationProvider', () => {
     expect(typeof migrations['0005_carritos']?.down).toBe('function');
     expect(typeof migrations['0007_carrito_items_lineas']?.up).toBe('function');
     expect(typeof migrations['0007_carrito_items_lineas']?.down).toBe('function');
+    expect(typeof migrations['0007_factura_payload_externo']?.up).toBe('function');
+    expect(typeof migrations['0007_factura_payload_externo']?.down).toBe('function');
   });
 });

@@ -6,7 +6,7 @@ export interface FacturaData {
   pedidoId: string;
   numero: string;
   estado: string;
-  payloadExterno: object | null;
+  payloadExterno: string | null;
 }
 
 export interface EmitirFacturaOptions {
@@ -19,7 +19,7 @@ export class Factura {
   readonly pedidoId: string;
   readonly numero: string;
   readonly estado: string;
-  readonly payloadExterno: object | null;
+  readonly payloadExterno: string | null;
 
   constructor(data: FacturaData) {
     this.id = data.id;

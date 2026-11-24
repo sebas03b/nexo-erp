@@ -40,6 +40,7 @@ export interface Pedido {
   impuesto: number;
   total: number;
   createdAt?: string;
+  payloadExterno?: string | null;
   items?: PedidoItem[];
 }
 

@@ -8,5 +8,6 @@ export default defineConfig({
     root: fileURLToPath(new URL('.', import.meta.url)),
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    hookTimeout: 30_000,
   },
 });

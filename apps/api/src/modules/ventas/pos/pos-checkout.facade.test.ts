@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { FacturacionXmlAdapter } from '../../../integrations/facturacion-electronica/facturacion-xml.adapter.js';
 import type { UnitOfWork, UnitOfWorkContext } from '../../../shared/db/unit-of-work.js';
 import type { AppEventMap } from '../../../shared/events/app-event-map.js';
 import type { DescuentoStrategy } from '../domain/pricing/descuento.strategy.js';
@@ -90,7 +91,7 @@ function crearDbMock(
 ) {
   const stockState = stock.map((s) => ({ ...s }));
   const productoRows = productos.map((p) => ({ ...p }));
-  const clientes = clientesRows.map((c) => ({ ...c }));
+  const clientes = clientesRows.map((c) => ({ ...c, nombre: 'Cliente de prueba' }));
 
   const db = {
     selectFrom: (table: string) => ({
@@ -107,7 +108,11 @@ function crearDbMock(
             }
             if (table === 'clientes') {
               const row = clientes.find((c) => c.documento === value || c.id === value);
-              return Promise.resolve(row ? { id: row.id } : undefined);
+              return Promise.resolve(
+                row
+                  ? { id: row.id, nombre: row.nombre, documento: row.documento }
+                  : undefined,
+              );
             }
             return Promise.resolve(undefined);
           },
@@ -163,20 +168,32 @@ const verificarStock = (): Promise<boolean> => Promise.resolve(true);
 describe('Patrón Facade - checkout POS', () => {
   it('debe ejecutar todo el flujo de venta dentro de una transacción', async () => {
     const eventos: Array<{ tipo: string; payload: unknown }> = [];
+    const facturasCreadas: Array<Parameters<VentasRepository['crearFactura']>[1]> = [];
     const { repo } = crearCarritoRepository();
     const { db, stockRows } = crearDbMock(
       [{ id: 'producto-1', precio: 100 }],
       [{ producto_id: 'producto-1', cantidad: 10 }],
     );
+    const repositoryConFactura = {
+      ...repository,
+      crearFactura: (
+        _db: Parameters<VentasRepository['crearFactura']>[0],
+        factura: Parameters<VentasRepository['crearFactura']>[1],
+      ) => {
+        facturasCreadas.push(factura);
+        return Promise.resolve();
+      },
+    } as unknown as VentasRepository;
 
     const facade = new PosCheckoutFacade(
       cadenaValidacion,
       estrategias,
       clientes,
-      repository,
+      repositoryConFactura,
       repo,
       crearUnitOfWork(eventos, db),
       verificarStock,
+      new FacturacionXmlAdapter(),
     );
 
     const resultado = await facade.checkout({
@@ -189,6 +206,8 @@ describe('Patrón Facade - checkout POS', () => {
     expect(resultado.pedido.estado).toBe('Pagado');
     expect(resultado.factura.numero).toBe('FAC-001');
     expect(resultado.factura.estado).toBe('Emitida');
+    expect(resultado.factura.payloadExterno).toContain('<AmountCents>20000</AmountCents>');
+    expect(facturasCreadas[0]?.payloadExterno).toBe(resultado.factura.payloadExterno);
     expect(resultado.pago.metodo).toBe('efectivo');
     expect(stockRows.find((s) => s.producto_id === 'producto-1')?.cantidad).toBe(8);
     expect(eventos.some((e) => e.tipo === 'PedidoPagado')).toBe(true);
@@ -210,6 +229,7 @@ describe('Patrón Facade - checkout POS', () => {
       repo,
       crearUnitOfWork(eventos, db),
       verificarStock,
+      new FacturacionXmlAdapter(),
     );
 
     await expect(

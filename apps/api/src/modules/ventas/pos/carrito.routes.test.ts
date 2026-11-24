@@ -193,9 +193,22 @@ describe('Carrito POS - Command API', () => {
     });
 
     expect(checkout.statusCode).toBe(201);
-    const body = checkout.json<{ pedido: { estado: string }; factura: { numero: string } }>();
+    const body = checkout.json<{
+      pedido: { id: string; estado: string };
+      factura: { numero: string; payloadExterno: string | null };
+    }>();
     expect(body.pedido.estado).toBe('Pagado');
     expect(body.factura.numero).toBe('FAC-000001');
+    expect(body.factura.payloadExterno).toContain('<AmountCents>20000</AmountCents>');
+
+    const detalle = await app.inject({
+      method: 'GET',
+      url: `/api/pedidos/${body.pedido.id}`,
+    });
+    expect(detalle.statusCode).toBe(200);
+    expect(detalle.json<{ payloadExterno: string | null }>().payloadExterno).toBe(
+      body.factura.payloadExterno,
+    );
 
     const stockRes = await app.inject({ method: 'GET', url: `/api/stock/${producto.id}` });
     expect(stockRes.json<{ cantidad: number }>().cantidad).toBe(8);

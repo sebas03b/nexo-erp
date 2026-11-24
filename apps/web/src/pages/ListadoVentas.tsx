@@ -129,6 +129,11 @@ export function ListadoVentas(): JSX.Element {
       await enviarJson<Pedido>(`/api/pedidos/${pedido.id}/pagar`, 'POST', {
         metodoPago: 'efectivo',
       });
+      await enviarJson<{ payloadExterno: string | null }>(
+        `/api/pedidos/${pedido.id}/factura`,
+        'POST',
+        {},
+      );
 
       setPedidos((actuales) =>
         actuales.map((actual) =>
@@ -406,6 +411,17 @@ export function ListadoVentas(): JSX.Element {
                 </table>
               </div>
             )}
+
+            {detalle.payloadExterno ? (
+              <>
+                <h4 className="detalle-subtitulo">
+                  XML Facturación Electrónica (Adapter)
+                </h4>
+                <pre className="bg-slate-950 text-emerald-400 text-xs p-3 rounded overflow-x-auto">
+                  {detalle.payloadExterno}
+                </pre>
+              </>
+            ) : null}
 
             <h4 className="detalle-subtitulo">Desglose financiero</h4>
             <dl className="detalle-financiero">

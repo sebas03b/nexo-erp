@@ -26,6 +26,7 @@ interface PedidoRow {
 interface PedidoDetalleRow extends PedidoRow {
   cliente_nombre: string;
   cliente_documento: string;
+  payload_externo: string | null;
 }
 
 interface PedidoItemRow {
@@ -44,7 +45,7 @@ interface FacturaRow {
   pedido_id: string;
   numero: string;
   estado: string;
-  payload_externo: object | null;
+  payload_externo: string | null;
 }
 
 const TRADUCCIONES_PEDIDO: TraduccionesErrorBd = {
@@ -135,6 +136,7 @@ function mapPedidoDetalle(
     impuesto: Number(row.impuesto),
     total: Number(row.total),
     createdAt: row.created_at.toISOString(),
+    payloadExterno: row.payload_externo,
     items: [...items],
   };
 }
@@ -222,6 +224,7 @@ export class VentasRepository {
     const pedidoRows = await this.#db
       .selectFrom('pedidos')
       .innerJoin('clientes', 'clientes.id', 'pedidos.cliente_id')
+      .leftJoin('facturas', 'facturas.pedido_id', 'pedidos.id')
       .select([
         'pedidos.id',
         'pedidos.cliente_id',
@@ -233,6 +236,7 @@ export class VentasRepository {
         'pedidos.created_at',
         'clientes.nombre as cliente_nombre',
         'clientes.documento as cliente_documento',
+        'facturas.payload_externo as payload_externo',
       ])
       .orderBy('pedidos.created_at', 'desc')
       .execute();
@@ -293,6 +297,7 @@ export class VentasRepository {
     const pedidoRow = await this.#db
       .selectFrom('pedidos')
       .innerJoin('clientes', 'clientes.id', 'pedidos.cliente_id')
+      .leftJoin('facturas', 'facturas.pedido_id', 'pedidos.id')
       .select([
         'pedidos.id',
         'pedidos.cliente_id',
@@ -304,6 +309,7 @@ export class VentasRepository {
         'pedidos.created_at',
         'clientes.nombre as cliente_nombre',
         'clientes.documento as cliente_documento',
+        'facturas.payload_externo as payload_externo',
       ])
       .where('pedidos.id', '=', id)
       .executeTakeFirst();
@@ -376,8 +382,7 @@ export class VentasRepository {
           pedido_id: factura.pedidoId,
           numero: factura.numero,
           estado: factura.estado,
-          payload_externo:
-            factura.payloadExterno === null ? null : JSON.stringify(factura.payloadExterno),
+          payload_externo: factura.payloadExterno,
         })
         .execute();
     } catch (error) {
@@ -401,8 +406,11 @@ export class VentasRepository {
     return row ? mapFactura(row) : undefined;
   }
 
-  async obtenerFacturaPorPedido(pedidoId: string): Promise<Factura | undefined> {
-    const row = await this.#db
+  async obtenerFacturaPorPedido(
+    pedidoId: string,
+    executor: Executor = this.#db,
+  ): Promise<Factura | undefined> {
+    const row = await executor
       .selectFrom('facturas')
       .selectAll()
       .where('pedido_id', '=', pedidoId)

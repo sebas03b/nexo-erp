@@ -1,6 +1,7 @@
 import type { FastifyPluginCallback } from 'fastify';
 import { z } from 'zod';
 
+import type { FacturacionElectronicaPort } from '../../integrations/facturacion-electronica/facturacion.port.js';
 import type { UnitOfWork } from '../../shared/db/unit-of-work.js';
 import type { AppEventMap } from '../../shared/events/app-event-map.js';
 import type { VentasRepository } from './ventas.repository.js';
@@ -42,11 +43,12 @@ export interface VentasRoutesOptions {
   estrategias: EstrategiasVentas;
   facade: PosCheckoutFacade;
   carritoRepository: CarritoRepository;
+  facturacion: FacturacionElectronicaPort;
 }
 
 export const ventasRoutes: FastifyPluginCallback<VentasRoutesOptions> = (
   app,
-  { repository, unitOfWork, clientes, estrategias, facade, carritoRepository },
+  { repository, unitOfWork, clientes, estrategias, facade, carritoRepository, facturacion },
   done,
 ) => {
   const service = new VentasService(
@@ -55,6 +57,7 @@ export const ventasRoutes: FastifyPluginCallback<VentasRoutesOptions> = (
     clientes,
     estrategias,
     carritoRepository,
+    facturacion,
   );
 
   const checkoutFacade = facade;

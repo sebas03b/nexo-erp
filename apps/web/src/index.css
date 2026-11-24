@@ -683,6 +683,20 @@ button:disabled {
   margin-top: 1.25rem;
 }
 
+pre.bg-slate-950 {
+  max-height: 14rem;
+  margin: 0 0 1.25rem;
+  overflow-x: auto;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background-color: #020617;
+  color: #34d399;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .boton-secundario {
   border: 1px solid #334155;
   background-color: transparent;
