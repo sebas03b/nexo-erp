@@ -6,7 +6,7 @@ import type { EntradaConcepto, ResultadoConcepto } from '../domain/tipos.js';
 export class PensionEslabon extends EslabonLiquidacionBase {
   readonly codigo = 'PENSION';
   readonly nombre = 'Pensión (4%)';
-  readonly tipo: 'deduccion' = 'deduccion';
+  readonly tipo = 'deduccion' as const;
 
   private readonly porcentaje = 0.04;
 

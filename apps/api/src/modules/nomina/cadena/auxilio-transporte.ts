@@ -6,7 +6,7 @@ import type { EntradaConcepto, ResultadoConcepto } from '../domain/tipos.js';
 export class AuxilioTransporteEslabon extends EslabonLiquidacionBase {
   readonly codigo = 'AUXILIO_TRANSPORTE';
   readonly nombre = 'Auxilio de transporte';
-  readonly tipo: 'devengo' = 'devengo';
+  readonly tipo = 'devengo' as const;
 
   private readonly umbralSalario = 2000000;
   private readonly valorAuxilio = 162000;

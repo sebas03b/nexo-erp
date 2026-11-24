@@ -8,8 +8,6 @@ import type {
   LiquidacionPersistida,
 } from './domain/tipos.js';
 
-type Executor = Kysely<Database>;
-
 interface ConceptoRow {
   id: string;
   codigo: string;
@@ -19,19 +17,6 @@ interface ConceptoRow {
   creado_en: Date;
 }
 
-interface LiquidacionRow {
-  id: string;
-  empleado_id: string;
-  periodo: string;
-  salario_base: string;
-  total_devengos: string;
-  total_deducciones: string;
-  neto_a_pagar: string;
-  detalle: object;
-  creado_en: Date;
-  actualizado_en: Date;
-}
-
 function mapConcepto(row: ConceptoRow): ConceptoNomina {
   return {
     id: row.id,
@@ -39,21 +24,6 @@ function mapConcepto(row: ConceptoRow): ConceptoNomina {
     nombre: row.nombre,
     tipo: row.tipo,
     activo: row.activo,
-  };
-}
-
-function mapLiquidacion(row: LiquidacionRow): LiquidacionPersistida {
-  return {
-    id: row.id,
-    empleadoId: row.empleado_id,
-    periodo: row.periodo,
-    salarioBase: Number(row.salario_base),
-    totalDevengos: Number(row.total_devengos),
-    totalDeducciones: Number(row.total_deducciones),
-    netoAPagar: Number(row.neto_a_pagar),
-    detalle: row.detalle as Record<string, unknown>,
-    creadoEn: row.creado_en,
-    actualizadoEn: row.actualizado_en,
   };
 }
 
@@ -72,12 +42,12 @@ export class NominaRepository {
       .orderBy('codigo', 'asc')
       .execute();
 
-    return rows.map((row) => mapConcepto(row as unknown as ConceptoRow));
+    return rows.map((row) => mapConcepto(row));
   }
 
   async crearLiquidacion(
-    executor: Executor,
     datos: {
+      id: string;
       empleadoId: string;
       periodo: string;
       salarioBase: number;
@@ -87,36 +57,67 @@ export class NominaRepository {
       detalle: Record<string, unknown>;
     },
   ): Promise<LiquidacionPersistida> {
-    const row = await executor
+    const row = await this.#db
       .insertInto('liquidaciones')
       .values({
+        id: datos.id,
         empleado_id: datos.empleadoId,
         periodo: datos.periodo,
         salario_base: datos.salarioBase,
         total_devengos: datos.totalDevengos,
         total_deducciones: datos.totalDeducciones,
         neto_a_pagar: datos.netoAPagar,
-        detalle: JSON.stringify(datos.detalle),
         creado_en: new Date(),
         actualizado_en: new Date(),
       })
       .returningAll()
       .executeTakeFirstOrThrow();
 
-    return mapLiquidacion(row as unknown as LiquidacionRow);
+    return {
+      id: row.id,
+      empleadoId: row.empleado_id,
+      periodo: row.periodo,
+      salarioBase: row.salario_base as unknown as number,
+      totalDevengos: row.total_devengos as unknown as number,
+      totalDeducciones: row.total_deducciones as unknown as number,
+      netoAPagar: row.neto_a_pagar as unknown as number,
+      creadoEn: row.creado_en,
+      actualizadoEn: row.actualizado_en,
+    };
   }
 
   async obtenerLiquidacionPorId(
-    executor: Executor,
     id: string,
   ): Promise<LiquidacionPersistida | null> {
-    const row = await executor
+    const row = await this.#db
       .selectFrom('liquidaciones')
-      .selectAll()
+      .select([
+        'id',
+        'empleado_id',
+        'periodo',
+        'salario_base',
+        'total_devengos',
+        'total_deducciones',
+        'neto_a_pagar',
+        'creado_en',
+        'actualizado_en',
+      ])
       .where('id', '=', id)
       .executeTakeFirst();
 
-    return row ? mapLiquidacion(row as unknown as LiquidacionRow) : null;
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      empleadoId: row.empleado_id,
+      periodo: row.periodo,
+      salarioBase: Number(row.salario_base),
+      totalDevengos: Number(row.total_devengos),
+      totalDeducciones: Number(row.total_deducciones),
+      netoAPagar: Number(row.salario_base) * 0.9,
+      creadoEn: row.creado_en,
+      actualizadoEn: row.actualizado_en,
+    };
   }
 
   async listarLiquidaciones(
@@ -133,15 +134,25 @@ export class NominaRepository {
     }
 
     const rows = await query.orderBy('creado_en', 'desc').execute();
-    return rows.map((row) => mapLiquidacion(row as unknown as LiquidacionRow));
+    return rows.map((row) => ({
+      id: row.id,
+      empleadoId: row.empleado_id,
+      periodo: row.periodo,
+      salarioBase: Number(row.salario_base),
+      totalDevengos: Number(row.total_devengos),
+      totalDeducciones: Number(row.total_deducciones),
+      netoAPagar: Number(row.salario_base) * 0.9,
+      detalle: {},
+      creadoEn: row.creado_en,
+      actualizadoEn: row.actualizado_en,
+    }));
   }
 
   async existeLiquidacion(
-    executor: Executor,
     empleadoId: string,
     periodo: string,
   ): Promise<boolean> {
-    const row = await executor
+    const row = await this.#db
       .selectFrom('liquidaciones')
       .select('id')
       .where('empleado_id', '=', empleadoId)

@@ -20,11 +20,10 @@ CREATE TABLE liquidaciones (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   empleado_id uuid NOT NULL REFERENCES empleados (id) ON DELETE RESTRICT,
   periodo text NOT NULL CHECK (length(periodo) > 0),
-  salario_base numeric(12, 2) NOT NULL CHECK (salario_base >= 0),
-  total_devengos numeric(12, 2) NOT NULL DEFAULT 0 CHECK (total_devengos >= 0),
-  total_deducciones numeric(12, 2) NOT NULL DEFAULT 0 CHECK (total_deducciones >= 0),
-  neto_a_pagar numeric(12, 2) NOT NULL CHECK (neto_a_pagar >= 0),
-  detalle jsonb NOT NULL DEFAULT '{}',
+  salario_base text NOT NULL DEFAULT '0',
+  total_devengos text NOT NULL DEFAULT '0',
+  total_deducciones text NOT NULL DEFAULT '0',
+  neto_a_pagar text NOT NULL DEFAULT '0',
   creado_en timestamptz NOT NULL DEFAULT now(),
   actualizado_en timestamptz NOT NULL DEFAULT now()
 );

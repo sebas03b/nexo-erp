@@ -24,6 +24,7 @@ export interface ResultadoConcepto {
 }
 
 export interface LiquidacionResultado {
+  id: string;
   empleadoId: string;
   periodo: string;
   salarioBase: number;
@@ -41,7 +42,6 @@ export interface LiquidacionPersistida {
   totalDevengos: number;
   totalDeducciones: number;
   netoAPagar: number;
-  detalle: Record<string, unknown>;
   creadoEn: Date;
   actualizadoEn: Date;
 }

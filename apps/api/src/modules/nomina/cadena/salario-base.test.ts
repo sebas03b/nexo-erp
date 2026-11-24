@@ -34,7 +34,7 @@ describe('Eslabon Salario Base', () => {
     const eslabon = new SalarioBaseEslabon();
     await expect(
       eslabon.ejecutar(
-        { ...entradaBase, salarioBase: NaN as unknown as number },
+        { ...entradaBase, salarioBase: NaN },
         [],
       ),
     ).rejects.toMatchObject({ code: 'SALARIO_BASE_INVALIDO' });

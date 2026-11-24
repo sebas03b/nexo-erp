@@ -126,14 +126,13 @@ export interface ConceptosNominaTable {
 }
 
 export interface LiquidacionesTable {
-  id: Generated<string>;
+  id: string;
   empleado_id: string;
   periodo: string;
   salario_base: NumericColumn;
   total_devengos: NumericColumn;
   total_deducciones: NumericColumn;
   neto_a_pagar: NumericColumn;
-  detalle: ColumnType<object, string, string>;
   creado_en: Generated<Date>;
   actualizado_en: Generated<Date>;
 }

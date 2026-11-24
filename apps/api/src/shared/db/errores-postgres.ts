@@ -14,7 +14,7 @@ export interface TraduccionErrorBd {
 
 export type TraduccionesErrorBd = Partial<Record<CodigoErrorPostgres, TraduccionErrorBd>>;
 
-function esErrorPostgres(error: unknown): error is ErrorPostgres {
+export function esErrorPostgres(error: unknown): error is ErrorPostgres {
   if (typeof error !== 'object' || error === null || !('code' in error)) {
     return false;
   }

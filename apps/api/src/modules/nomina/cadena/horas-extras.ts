@@ -6,7 +6,7 @@ import type { EntradaConcepto, ResultadoConcepto } from '../domain/tipos.js';
 export class HorasExtrasEslabon extends EslabonLiquidacionBase {
   readonly codigo = 'HORAS_EXTRAS';
   readonly nombre = 'Horas extras';
-  readonly tipo: 'devengo' = 'devengo';
+  readonly tipo = 'devengo' as const;
 
   async ejecutar(
     entrada: EntradaConcepto,
