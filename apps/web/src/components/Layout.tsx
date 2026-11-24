@@ -1,16 +1,7 @@
 import type { JSX, ReactNode } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
-
-import {
-  BiCalculator,
-  BiCartAlt,
-  BiBox,
-  BiGroup,
-  BiCalendar,
-  BiWallet,
-  BiIdCard,
-} from 'react-icons/bi';
-
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { BiCalculator, BiCartAlt, BiBox, BiGroup, BiCalendar, BiWallet, BiIdCard, BiLogOut } from 'react-icons/bi';
+import { useAuth } from '../hooks/useAuth';
 import logoSidebar from '../assets/logonexo1.png';
 
 interface EnlaceSidebar {
@@ -18,6 +9,7 @@ interface EnlaceSidebar {
   to: string;
   etiqueta: string;
   icono: ReactNode;
+  rol?: 'admin' | 'cajero' | 'contador';
 }
 
 const enlaces: EnlaceSidebar[] = [
@@ -50,12 +42,14 @@ const enlaces: EnlaceSidebar[] = [
     to: '/contabilidad',
     etiqueta: 'Contabilidad',
     icono: <BiWallet size={20} className="mr-2" />,
+    rol: 'contador',
   },
   {
     id: 'nomina',
     to: '/nomina',
     etiqueta: 'Nómina',
     icono: <BiCalculator size={20} className="mr-2" />,
+    rol: 'admin',
   },
   {
     id: 'personal',
@@ -66,16 +60,36 @@ const enlaces: EnlaceSidebar[] = [
 ];
 
 export function Layout(): JSX.Element {
+  const { usuario, logout, cargando } = useAuth();
+  const navigate = useNavigate();
+
+  const enlacesFiltrados = cargando
+    ? []
+    : enlaces.filter((e) => !e.rol || e.rol === usuario?.rol || usuario?.rol === 'admin');
+
+  const manejarCerrarSesion = () => {
+    logout();
+    navigate('/login');
+  };
+
   return (
     <div className="app-layout">
-      <aside className="sidebar">
-        <NavLink to="/ventas" className="sidebar-marca sidebar-logo-contenedor">
-          <img src={logoSidebar} alt="Nexo-ERP" className="sidebar-logo" />
-        </NavLink>
+      <aside className="app-layout">
+        <header className="sidebar-header">
+          <NavLink to="/ventas" className="sidebar-logo-contenedor">
+            <img src={logoSidebar} alt="Nexo-ERP" className="sidebar-logo" />
+          </NavLink>
+          {usuario && (
+            <div className="usuario-info">
+              <p className="usuario-nombre">{usuario.nombre}</p>
+              <p className="usuario-rol">{usuario.rol}</p>
+            </div>
+          )}
+        </header>
 
         <nav className="sidebar-nav" aria-label="Navegación principal">
           <p className="sidebar-seccion">Módulos</p>
-          {enlaces.map((enlace) => (
+          {enlacesFiltrados.map((enlace) => (
             <NavLink
               key={enlace.id}
               to={enlace.to}
@@ -91,6 +105,15 @@ export function Layout(): JSX.Element {
               <span>{enlace.etiqueta}</span>
             </NavLink>
           ))}
+          <div className="sidebar-seccion">Sesión</div>
+          <button
+            className="sidebar-enlace"
+            onClick={manejarCerrarSesion}
+            disabled={cargando}
+          >
+            <span className="sidebar-icono">{<BiLogOut size={20} className="mr-2" />}</span>
+            <span>Cerrar sesión</span>
+          </button>
         </nav>
       </aside>
 
