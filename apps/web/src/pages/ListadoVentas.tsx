@@ -415,7 +415,7 @@ export function ListadoVentas(): JSX.Element {
             {detalle.payloadExterno ? (
               <>
                 <h4 className="detalle-subtitulo">
-                  XML Facturación Electrónica (Adapter)
+                  XML Facturación Electrónica
                 </h4>
                 <pre className="bg-slate-950 text-emerald-400 text-xs p-3 rounded overflow-x-auto">
                   {detalle.payloadExterno}
