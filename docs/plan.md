@@ -90,7 +90,7 @@ nexo-erp/
 | 3 | Chain of Responsibility (ventas) | `cadena-validacion.ts` | Validaciones que se añaden o quitan | Stock, cliente y caja abierta como eslabones |
 | 4 | Strategy | `pricing/*`, `payments/*` | Descuentos, impuestos y medios de pago | Cambiar estrategia sin tocar el checkout |
 | 5 | Builder | `factura.builder.ts` | Factura con muchas partes opcionales | Construcción paso a paso |
-| 6 | Observer | `event-bus.ts` | Desacoplar módulos | `OrdenPagada` descuenta stock y registra asiento |
+| 6 | Observer | `event-bus.ts` | Desacoplar módulos | `PedidoPagado` activa notificaciones; el asiento contable queda para Fase 6 |
 | 7 | State | `citas/domain/states/*` | Transiciones válidas de una cita | Pasar de Cancelada a Completada y ver el rechazo |
 | 8 | Factory Method | `notificacion.factory.ts` | Elegir canal de notificación | Mismo evento por email, SMS o WhatsApp |
 | 9 | Adapter | `integrations/*` | APIs externas con formatos ajenos | Mock de facturación tras tu interfaz |
@@ -210,21 +210,28 @@ problemas ordenada por gravedad, sin modificar código.
 - `cadena-validacion.ts` con eslabones: caja abierta, cliente válido, stock suficiente.
 - `factura.builder.ts`.
 - Comandos con `ejecutar()` y `deshacer()`: agregar ítem, quitar ítem, aplicar descuento, anular venta.
-- `PosCheckoutFacade.checkout()` dentro de una única transacción: validar, calcular, cobrar, facturar, descontar stock, publicar `OrdenPagada` en el outbox.
+- `PosCheckoutFacade.checkout()` dentro de una única transacción: validar, calcular, cobrar, facturar, descontar stock, publicar `PedidoPagado` en el outbox.
 - Pantalla POS en el frontend.
 
 **Criterio de aceptación:** una venta exitosa de punta a punta; si falla cualquier paso, nada queda a medias en la base de datos (prueba de rollback); deshacer restituye el carrito.
 
 ### Fase 5: Citas y notificaciones
 
-**Patrones:** State, Factory Method.
+**Estado:** completada y verificada.
+
+**Patrones:** State, Factory Method e integración mediante Observer.
 
 **Entregables:**
 - Agenda y citas con estados Pendiente, Confirmada, En Proceso, Completada y Cancelada.
-- `NotificacionFactory` que crea `EmailSender`, `SmsSender` o `WhatsAppSender` (simulados con log o archivo).
-- Suscripción a `CitaConfirmada` y `OrdenPagada`.
+- Persistencia transaccional con bloqueo del empleado, control optimista y prevención de solapamientos.
+- `NotificacionFactory` que crea `EmailSender`, `SmsSender` o `WhatsAppSender` (simulados con salida inyectable).
+- Suscripción post-commit a `CitaConfirmada` y `PedidoPagado` mediante `UnitOfWork<AppEventMap>` y Outbox.
+- Pantalla web de agenda y edición del canal preferido del cliente.
+- Actualización parcial de clientes y catálogo de empleados.
 
 **Criterio de aceptación:** una transición ilegal es rechazada con un error claro; cambiar la preferencia del cliente cambia el canal sin tocar el emisor del evento.
+
+**Evidencia de cierre:** pruebas unitarias, de integración, de rutas, de concurrencia y de frontend; `pnpm test`, `pnpm typecheck`, `pnpm lint` y `pnpm build` en verde; migraciones up/down y seed repetible verificados en PostgreSQL.
 
 ### Fase 6: Contabilidad e integración externa
 
@@ -232,7 +239,7 @@ problemas ordenada por gravedad, sin modificar código.
 
 **Entregables:**
 - Caja (apertura y cierre).
-- Asientos generados al recibir `OrdenPagada`.
+- Asientos generados al recibir `PedidoPagado`.
 - Reporte de ventas.
 - `FacturacionElectronicaPort` con un adapter hacia un mock que simula un formato ajeno (por ejemplo XML).
 
@@ -295,7 +302,7 @@ Una sola venta recorre casi todos los patrones:
 4. **Strategy:** calcula descuento, impuesto y medio de pago.
 5. **Builder:** arma la factura.
 6. **Adapter:** la envía a la facturación electrónica simulada.
-7. **Observer:** se publica `OrdenPagada`; inventario descuenta stock, contabilidad registra el asiento y notificaciones envía el comprobante.
+7. **Observer:** se publica `PedidoPagado`; inventario descuenta stock, contabilidad registra el asiento y notificaciones envía el comprobante.
 8. **Factory Method:** crea el canal de notificación elegido.
 
 **Demostraciones aparte:** State (cita con transición ilegal), Command (deshacer en el POS) y Chain de nómina.
@@ -324,7 +331,7 @@ Una sola venta recorre casi todos los patrones:
 - [ ] Fase 2: Inventario y Pedido/Factura (State)
 - [ ] Fase 3: Precios, impuestos y pagos (Strategy)
 - [ ] Fase 4: Checkout POS (Facade, Command, Chain, Builder)
-- [ ] Fase 5: Citas y notificaciones (State, Factory Method)
+- [x] Fase 5: Citas y notificaciones (State, Factory Method)
 - [ ] Fase 6: Contabilidad e integración externa (Adapter)
 - [ ] Fase 7: Nómina (Chain)
 - [ ] Fase 8: Seguridad y caché (Proxy)
@@ -334,4 +341,4 @@ Una sola venta recorre casi todos los patrones:
 
 ## 11. Siguiente paso
 
-Empezar la Fase 0: redactar `AGENTS.md` y las specs de `docs/`, y luego lanzar el primer prompt a opencode para crear el esqueleto del monorepo con Docker y PostgreSQL.
+Continuar con la Fase 6: Contabilidad e integración externa. La deuda P0 detectada en el checkout de la Fase 4 se conserva separada y requiere su propia revisión y aprobación antes de mezclarse con Contabilidad.

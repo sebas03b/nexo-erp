@@ -125,7 +125,7 @@ Respuesta:
 }
 ```
 
-Los filtros `desde` y `hasta` son ISO opcionales y seleccionan citas por solapamiento. `estado` admite `Pendiente`, `Confirmada`, `En Proceso`, `Completada` o `Cancelada`.
+Las fechas de creación, detalle y filtros usan ISO estricto con offset (`Z` u offset numérico). `z.iso.datetime({ offset: true })` rechaza valores locales sin zona horaria. Los filtros `desde` y `hasta` son opcionales y seleccionan citas por solapamiento. `estado` admite `Pendiente`, `Confirmada`, `En Proceso`, `Completada` o `Cancelada`.
 
 ### Errores
 
@@ -183,20 +183,40 @@ Todos los archivos del dominio de estados comienzan con `// Patrón: State`.
 
 `CitasService` depende de puertos para validar clientes y empleados. `app.ts` es el composition root y conecta esos puertos con sus repositorios. Citas no importa Clientes, Empleados ni Notificaciones.
 
+## Frontend de Citas
+
+La página `apps/web/src/pages/Citas.tsx` ofrece:
+
+- Agenda ordenada por hora, filtro diario y estados de carga, vacío y error.
+- Modal de creación con cliente, empleado activo, inicio, fin y motivo.
+- Acciones derivadas exclusivamente del estado de cada cita.
+- Bloqueo de controles mientras hay una creación o transición en vuelo.
+
+Las fechas se interpretan de forma explícita en `America/Bogota`: el valor de `datetime-local` se convierte a ISO antes de enviarse y el filtro diario construye el intervalo `[00:00, 00:00 del día siguiente)` en esa zona. La API conserva instantes en `timestamptz`.
+
+Los catálogos de clientes y empleados se solicitan de forma independiente. Si uno falla, se muestra el error y se ofrece reintento sin invalidar el otro catálogo. El modal gestiona foco inicial, contención de `Tab`, cierre con `Escape` y restauración del foco al botón «Nueva cita».
+
+Ante `CONFLICTO_ESTADO_CITA`, la UI consulta `GET /api/citas/:id` y reconcilia el estado visible. Si la consulta tampoco es posible, retira la cita obsoleta de la lista y conserva el mensaje de error.
+
 ## Evidencia de pruebas
 
 - Todas las transiciones legales e ilegales del State.
 - Persistencia del estado tras una transición ilegal.
-- Fechas inválidas y estado desconocido.
+- Fechas inválidas, ISO sin offset y estado desconocido.
 - Creación, consulta, listado y filtros de la API.
 - Solapamiento, citas consecutivas y reutilización de horario cancelado.
 - Empleado inexistente e inactivo.
 - Persistencia de `CitaConfirmada` en `outbox_events` y ausencia del evento ante rollback.
-- Dos solicitudes concurrentes por el mismo empleado y horario: una succeeds y otra recibe `409`.
+- Dos solicitudes concurrentes por el mismo empleado y horario: una responde `201` y otra `409 CITA_SOLAPADA`.
+- Dos confirmaciones concurrentes: una responde `200`, otra `409 CONFLICTO_ESTADO_CITA` y se publica un solo evento.
+- En una verificación adicional contra PostgreSQL real, ocho solicitudes `POST /api/citas` simultáneas para el mismo empleado y horario produjeron exactamente un `201` y siete `409 CITA_SOLAPADA`.
+- Flujo web completo: render, creación, filtro diario, transiciones, errores, reconciliación de conflictos, reintento de catálogos, gestión de foco y controles deshabilitados durante operaciones.
 
 ## Decisiones y limitaciones
 
 - La concurrencia se serializa por empleado, no por toda la agenda.
 - La especificación no reprograma citas ni permite cancelar una cita `En Proceso`.
-- La agenda web usa `America/Bogota` para mostrar fechas; la API persiste `timestamptz`.
+- La agenda web usa `America/Bogota` para mostrar fechas; la API persiste `timestamptz` y exige ISO con offset.
+- `TRANSICION_CITA_INVALIDA` indica que el estado cargado no admite la transición; `CONFLICTO_ESTADO_CITA` indica que otra operación cambió el estado antes del update optimista.
 - La lectura de detalle puede unir Clientes y Empleados en el repositorio; las reglas de escritura usan puertos.
+- La agenda es una vista operativa, no un calendario gráfico ni una herramienta de reprogramación.

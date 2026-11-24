@@ -52,15 +52,20 @@ apps/api/src/modules/notificaciones/
     └── whatsapp.sender.ts
 ```
 
-- **Creator:** `NotificacionFactory`.
-- **Product:** `Notificador`.
-- **Products concretos:** `EmailSender`, `SmsSender`, `WhatsAppSender`.
+| Participante | Archivo | Rol |
+|---|---|---|
+| Creator | `notificacion.factory.ts` | Construye el notificador solicitado mediante `crear(canal)`. |
+| Product | `notificacion.types.ts` | Interfaz `Notificador`. |
+| Producto concreto | `notificadores/email.sender.ts` | Notificador de email (`// Patrón: Factory Method`). |
+| Producto concreto | `notificadores/sms.sender.ts` | Notificador de SMS (`// Patrón: Factory Method`). |
+| Producto concreto | `notificadores/whatsapp.sender.ts` | Notificador de WhatsApp (`// Patrón: Factory Method`). |
 
 `notificacion.factory.ts` comienza con `// Patrón: Factory Method`.
 
 ### Nota académica
 
 La factory con `switch` es funcionalmente una **Simple Factory** en la clasificación GoF estricta. Nexo-ERP conserva la denominación **Factory Method** adoptada en `docs/plan.md` y `AGENTS.md`: un creator central construye el producto concreto según el canal solicitado.
+
 
 ### Salidas simuladas
 
