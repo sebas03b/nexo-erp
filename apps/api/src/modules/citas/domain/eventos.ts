@@ -6,4 +6,11 @@ export type CitasEventMap = {
     fin: string;
     confirmadaEn: string;
   };
+  RecordatorioCitaSolicitado: {
+    citaId: string;
+    clienteId: string;
+    inicio: string;
+    fin: string;
+    notas: string | null;
+  };
 };

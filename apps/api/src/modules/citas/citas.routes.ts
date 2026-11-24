@@ -76,5 +76,14 @@ export const citasRoutes: FastifyPluginCallback<CitasRoutesOptions> = (
     },
   );
 
+  app.post<{ Params: { id: string } }>(
+    '/api/citas/:id/recordatorio',
+    async (request) => {
+      const { id } = citaParamsSchema.parse(request.params);
+      const cita = await service.solicitarRecordatorio(id);
+      return { ok: true, citaId: cita.id };
+    },
+  );
+
   done();
 };

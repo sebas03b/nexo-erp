@@ -88,5 +88,20 @@ export function useCitas() {
     [listar],
   );
 
-  return { citas, clientes, error, cargando, listar, crear, cambiarEstado };
+  const enviarRecordatorio = useCallback(async (id: string): Promise<boolean> => {
+    setError(null);
+    try {
+      await request<{ ok: boolean; citaId: string }>(`/citas/${id}/recordatorio`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error inesperado';
+      setError(message);
+      return false;
+    }
+  }, []);
+
+  return { citas, clientes, error, cargando, listar, crear, cambiarEstado, enviarRecordatorio };
 }

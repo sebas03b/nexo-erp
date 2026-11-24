@@ -209,4 +209,58 @@ describe('Citas API', () => {
     expect(second.statusCode).toBe(409);
     expect(second.json()).toMatchObject({ error: { code: 'HORARIO_OCUPADO' } });
   });
+
+  it('POST /api/citas/:id/recordatorio en cita pendiente responde 200 y publica evento', async () => {
+    const creada = (await crearCita()).json<CitaJson>();
+    const antes = await db.selectFrom('outbox_events').selectAll().execute();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/citas/${creada.id}/recordatorio`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, citaId: creada.id });
+
+    const eventos = await db.selectFrom('outbox_events').selectAll().execute();
+    expect(eventos.length).toBe(antes.length + 1);
+    const evento = eventos.find((e) => e.tipo === 'RecordatorioCitaSolicitado');
+    expect(evento).toBeDefined();
+  });
+
+  it('POST /api/citas/:id/recordatorio en cita cancelada responde 409', async () => {
+    const creada = (await crearCita()).json<CitaJson>();
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/citas/${creada.id}/estado`,
+      payload: { accion: 'cancelar' },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/citas/${creada.id}/recordatorio`,
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({
+      error: { code: 'ESTADO_INVALIDO_RECORDATORIO' },
+    });
+  });
+
+  it('POST /api/citas/:id/recordatorio en cita completada responde 409', async () => {
+    const creada = (await crearCita()).json<CitaJson>();
+    await app.inject({ method: 'PATCH', url: `/api/citas/${creada.id}/estado`, payload: { accion: 'confirmar' } });
+    await app.inject({ method: 'PATCH', url: `/api/citas/${creada.id}/estado`, payload: { accion: 'iniciar' } });
+    await app.inject({ method: 'PATCH', url: `/api/citas/${creada.id}/estado`, payload: { accion: 'completar' } });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/citas/${creada.id}/recordatorio`,
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({
+      error: { code: 'ESTADO_INVALIDO_RECORDATORIO' },
+    });
+  });
 });

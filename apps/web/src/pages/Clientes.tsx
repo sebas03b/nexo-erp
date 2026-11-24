@@ -10,7 +10,8 @@ interface ClienteApi {
   documento: string;
   email: string | null;
   telefono: string | null;
-  canal_preferido: CanalPreferido | null;
+  canal_preferido?: CanalPreferido | null;
+  canalPreferido?: CanalPreferido | null;
 }
 
 function deApi(cliente: ClienteApi): Cliente {
@@ -20,7 +21,7 @@ function deApi(cliente: ClienteApi): Cliente {
     documento: cliente.documento,
     email: cliente.email,
     telefono: cliente.telefono,
-    canalPreferido: cliente.canal_preferido ?? 'email',
+    canalPreferido: cliente.canalPreferido ?? cliente.canal_preferido ?? 'email',
   };
 }
 

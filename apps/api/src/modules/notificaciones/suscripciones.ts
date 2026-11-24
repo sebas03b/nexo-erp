@@ -15,6 +15,14 @@ export function registrarSuscripcionesNotificaciones(
     );
   });
 
+  bus.subscribe('RecordatorioCitaSolicitado', async ({ citaId, clienteId, inicio, fin, notas }) => {
+    const detalle = notas ? ` (${notas})` : '';
+    await servicio.notificarCliente(
+      clienteId,
+      `Recordatorio: su cita ${citaId}${detalle} está programada para ${inicio} - ${fin}.`,
+    );
+  });
+
   bus.subscribe('PedidoPagado', async ({ pedidoId, clienteId, total }) => {
     await servicio.notificarCliente(
       clienteId,

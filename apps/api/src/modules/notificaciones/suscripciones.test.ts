@@ -123,4 +123,46 @@ describe('Suscripciones de notificaciones (Observer)', () => {
     expect(log).toHaveBeenCalledWith('ok');
     log.mockRestore();
   });
+
+  it('publicar RecordatorioCitaSolicitado envía por canal preferido del cliente', async () => {
+    const bus = new InMemoryEventBus<AppEventMap>();
+    const servicio = new ServicioNotificaciones(new NotificacionFactory(), (clienteId) => {
+      if (clienteId === 'cli-email') {
+        return Promise.resolve({ nombre: 'Ana', canalPreferido: 'email' as const });
+      }
+      if (clienteId === 'cli-sms') {
+        return Promise.resolve({ nombre: 'Beto', canalPreferido: 'sms' as const });
+      }
+      return Promise.resolve({ nombre: 'Carla', canalPreferido: 'whatsapp' as const });
+    });
+    registrarSuscripcionesNotificaciones(bus, servicio);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await bus.publish('RecordatorioCitaSolicitado', {
+      citaId: 'c1',
+      clienteId: 'cli-email',
+      inicio: '2026-05-01T10:00:00.000Z',
+      fin: '2026-05-01T11:00:00.000Z',
+      notas: 'Corte',
+    });
+    await bus.publish('RecordatorioCitaSolicitado', {
+      citaId: 'c2',
+      clienteId: 'cli-sms',
+      inicio: '2026-05-01T12:00:00.000Z',
+      fin: '2026-05-01T13:00:00.000Z',
+      notas: null,
+    });
+    await bus.publish('RecordatorioCitaSolicitado', {
+      citaId: 'c3',
+      clienteId: 'cli-wa',
+      inicio: '2026-05-01T14:00:00.000Z',
+      fin: '2026-05-01T15:00:00.000Z',
+      notas: null,
+    });
+
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('[Email]'));
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('[SMS]'));
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('[WhatsApp]'));
+    log.mockRestore();
+  });
 });

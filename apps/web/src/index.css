@@ -742,6 +742,34 @@ button:disabled {
   text-align: right;
 }
 
+.text-left {
+  text-align: left;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.table-fixed {
+  table-layout: fixed;
+}
+
+.w-28 {
+  width: 7rem;
+}
+
+.w-32 {
+  width: 8rem;
+}
+
+.w-36 {
+  width: 9rem;
+}
+
 .gap-4 {
   gap: 1rem;
 }

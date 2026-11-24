@@ -110,4 +110,30 @@ export class CitasService {
       return cita;
     });
   }
+
+  async solicitarRecordatorio(id: string): Promise<Cita> {
+    return this.uow.execute(async (ctx) => {
+      const cita = await this.repo.obtener(ctx.db, id);
+      if (!cita) {
+        throw new RecursoNoEncontrado('CITA_NO_ENCONTRADA', 'Cita no encontrada');
+      }
+
+      if (cita.estado !== 'Pendiente' && cita.estado !== 'Confirmada') {
+        throw new DomainError('No se puede enviar recordatorio en el estado actual de la cita', {
+          code: 'ESTADO_INVALIDO_RECORDATORIO',
+          statusCode: 409,
+        });
+      }
+
+      await ctx.publish('RecordatorioCitaSolicitado', {
+        citaId: cita.id,
+        clienteId: cita.clienteId,
+        inicio: cita.inicio.toISOString(),
+        fin: cita.fin.toISOString(),
+        notas: cita.notas,
+      });
+
+      return cita;
+    });
+  }
 }

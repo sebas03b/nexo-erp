@@ -249,14 +249,14 @@ export function Productos(): JSX.Element {
             <p className="app-empty">No hay productos registrados.</p>
           ) : (
             <div className="tabla-contenedor">
-              <table className="productos-tabla">
+              <table className="productos-tabla table-fixed w-full">
                 <thead>
                   <tr>
-                    <th scope="col">SKU</th>
+                    <th scope="col" className="w-28 text-left">SKU</th>
                     <th scope="col">Nombre</th>
-                    <th scope="col">Precio</th>
-                    <th scope="col">Stock</th>
-                    <th scope="col">Acciones</th>
+                    <th scope="col" className="w-36 text-right">Precio</th>
+                    <th scope="col" className="w-28 text-center">Stock</th>
+                    <th scope="col" className="w-32 text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -264,15 +264,15 @@ export function Productos(): JSX.Element {
                     const cantidad = stock[producto.id] ?? 0;
                     return (
                       <tr key={producto.id}>
-                        <td>{producto.sku}</td>
+                        <td className="w-28 text-left">{producto.sku}</td>
                         <td>{producto.nombre}</td>
-                        <td>{formatearMoneda(producto.precio)}</td>
-                        <td>
+                        <td className="w-36 text-right">{formatearMoneda(producto.precio)}</td>
+                        <td className="w-28 text-center">
                           <span className={`stock-badge ${claseStock(cantidad)}`}>
                             {cantidad}
                           </span>
                         </td>
-                        <td>
+                        <td className="w-32 text-center">
                           <div className="acciones-tabla flex justify-center items-center gap-2">
                             <button
                               type="button"
@@ -336,22 +336,24 @@ export function Productos(): JSX.Element {
             <p className="app-empty">No hay servicios registrados.</p>
           ) : (
             <div className="tabla-contenedor">
-              <table className="productos-tabla">
+              <table className="productos-tabla table-fixed w-full">
                 <thead>
                   <tr>
-                    <th scope="col">SKU</th>
+                    <th scope="col" className="w-28 text-left">SKU</th>
                     <th scope="col">Nombre</th>
-                    <th scope="col">Precio</th>
-                    <th scope="col">Acciones</th>
+                    <th scope="col" className="w-36 text-right">Precio</th>
+                    <th scope="col" className="w-28 text-center" aria-hidden="true"></th>
+                    <th scope="col" className="w-32 text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {serviciosFiltrados.map((servicio) => (
                     <tr key={servicio.id}>
-                      <td>{servicio.sku}</td>
+                      <td className="w-28 text-left">{servicio.sku}</td>
                       <td>{servicio.nombre}</td>
-                      <td>{formatearMoneda(servicio.precio)}</td>
-                      <td>
+                      <td className="w-36 text-right">{formatearMoneda(servicio.precio)}</td>
+                      <td className="w-28 text-center" aria-hidden="true"></td>
+                      <td className="w-32 text-center">
                         <div className="acciones-tabla flex justify-center items-center gap-2">
                           <button
                             type="button"

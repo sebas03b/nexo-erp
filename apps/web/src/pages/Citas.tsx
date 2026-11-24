@@ -1,4 +1,4 @@
-import { useMemo, type JSX } from 'react';
+import { useEffect, useMemo, useState, type JSX } from 'react';
 import { AiOutlineClose } from 'react-icons/ai';
 import { BsCheck2All, BsEnvelopeArrowUp } from 'react-icons/bs';
 
@@ -19,12 +19,19 @@ function formatearHorario(inicioIso: string, finIso: string): string {
 }
 
 export function Citas(): JSX.Element {
-  const { citas, clientes, error, cargando, listar, cambiarEstado } = useCitas();
+  const { citas, clientes, error, cargando, listar, cambiarEstado, enviarRecordatorio } = useCitas();
+  const [mensajeExito, setMensajeExito] = useState<string | null>(null);
 
   const clientesPorId = useMemo(
     () => new Map(clientes.map((c) => [c.id, c.nombre])),
     [clientes],
   );
+
+  useEffect(() => {
+    if (!mensajeExito) return;
+    const timer = setTimeout(() => setMensajeExito(null), 4000);
+    return () => clearTimeout(timer);
+  }, [mensajeExito]);
 
   return (
     <div className="pagina">
@@ -40,6 +47,12 @@ export function Citas(): JSX.Element {
       {error ? (
         <p role="alert" className="alert alert-error">
           {error}
+        </p>
+      ) : null}
+
+      {mensajeExito ? (
+        <p role="status" className="alert alert-success">
+          {mensajeExito}
         </p>
       ) : null}
 
@@ -92,7 +105,15 @@ export function Citas(): JSX.Element {
                           className="boton-secundario boton-compacto"
                           title="Enviar recordatorio"
                           aria-label="Enviar recordatorio"
-                          onClick={() => {}}
+                          disabled={cita.estado !== 'Pendiente' && cita.estado !== 'Confirmada'}
+                          onClick={() => {
+                            setMensajeExito(null);
+                            void enviarRecordatorio(cita.id).then((ok) => {
+                              if (ok) {
+                                setMensajeExito('Recordatorio enviado al canal preferido del cliente');
+                              }
+                            });
+                          }}
                         >
                           <BsEnvelopeArrowUp />
                         </button>
@@ -101,7 +122,11 @@ export function Citas(): JSX.Element {
                           className="boton-secundario boton-compacto"
                           title="Completar cita"
                           aria-label="Completar cita"
-                          onClick={() => void cambiarEstado(cita.id, 'completar')}
+                          disabled={cita.estado === 'Completada' || cita.estado === 'Cancelada'}
+                          onClick={() => {
+                            setMensajeExito(null);
+                            void cambiarEstado(cita.id, 'completar');
+                          }}
                         >
                           <BsCheck2All />
                         </button>
@@ -110,7 +135,11 @@ export function Citas(): JSX.Element {
                           className="boton-secundario boton-compacto boton-eliminar-pedido"
                           title="Cancelar cita"
                           aria-label="Cancelar cita"
-                          onClick={() => void cambiarEstado(cita.id, 'cancelar')}
+                          disabled={cita.estado === 'Completada' || cita.estado === 'Cancelada'}
+                          onClick={() => {
+                            setMensajeExito(null);
+                            void cambiarEstado(cita.id, 'cancelar');
+                          }}
                         >
                           <AiOutlineClose />
                         </button>
