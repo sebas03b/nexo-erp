@@ -123,6 +123,7 @@ describe('CitasService', () => {
         email: null,
         telefono: null,
         activo: true,
+        salario_base: 1500000,
       })
       .returning('id')
       .executeTakeFirstOrThrow();

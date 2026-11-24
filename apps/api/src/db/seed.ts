@@ -36,19 +36,30 @@ const EMPLEADOS = [
     email: 'lauraperez@email.com',
     telefono: '3001112233',
     activo: true,
+    salario_base: 1500000,
   },
   {
     nombre: 'Mateo Rojas',
     email: 'mateorojas@email.com',
     telefono: '3014445566',
     activo: true,
+    salario_base: 1800000,
   },
   {
     nombre: 'Sofía Navarro',
     email: 'sofianavarro@email.com',
     telefono: '3027778899',
     activo: true,
+    salario_base: 1200000,
   },
+];
+
+const CONCEPTOS_NOMINA = [
+  { codigo: 'SALARIO_BASE', nombre: 'Salario base', tipo: 'devengo' as const, activo: true },
+  { codigo: 'HORAS_EXTRAS', nombre: 'Horas extras', tipo: 'devengo' as const, activo: true },
+  { codigo: 'AUXILIO_TRANSPORTE', nombre: 'Auxilio de transporte', tipo: 'devengo' as const, activo: true },
+  { codigo: 'SALUD', nombre: 'Salud (4%)', tipo: 'deduccion' as const, activo: true },
+  { codigo: 'PENSION', nombre: 'Pensión (4%)', tipo: 'deduccion' as const, activo: true },
 ];
 
 const PRODUCTOS = [
@@ -80,6 +91,10 @@ async function main(): Promise<void> {
     console.log('Limpiando tablas de inventario y clientes…');
 
     await db.deleteFrom('citas').execute();
+    await db.deleteFrom('asientos').execute();
+    await db.deleteFrom('cajas').execute();
+    await db.deleteFrom('liquidaciones').execute();
+    await db.deleteFrom('conceptos_nomina').execute();
     await db.deleteFrom('empleados').execute();
     await db.deleteFrom('facturas').execute();
     await db.deleteFrom('pedido_items').execute();
@@ -117,6 +132,18 @@ async function main(): Promise<void> {
 
     for (const empleado of empleadosInsertados) {
       console.log(`   - ${empleado.nombre}`);
+    }
+
+    console.log('Insertando conceptos de nómina…');
+
+    const conceptosInsertados = await db
+      .insertInto('conceptos_nomina')
+      .values(CONCEPTOS_NOMINA)
+      .returning(['id', 'codigo', 'tipo'])
+      .execute();
+
+    for (const concepto of conceptosInsertados) {
+      console.log(`   - ${concepto.codigo} (${concepto.tipo})`);
     }
 
     const clienteDemo = clientesInsertados[0];

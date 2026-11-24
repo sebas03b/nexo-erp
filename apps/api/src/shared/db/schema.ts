@@ -66,6 +66,15 @@ export interface FacturasTable {
   payload_externo: ColumnType<object | null, string | null, string | null>;
 }
 
+export interface CajasTable {
+  id: Generated<string>;
+  usuario_id: string;
+  apertura: Generated<Date>;
+  cierre: Date | null;
+  monto_inicial: NumericColumn;
+  monto_final: NumericColumn | null;
+}
+
 export interface CarritosTable {
   id: Generated<string>;
   estado: 'Abierto' | 'Cerrado' | 'Descartado';
@@ -104,6 +113,29 @@ export interface EmpleadosTable {
   email: string | null;
   telefono: string | null;
   activo: Generated<boolean>;
+  salario_base: NumericColumn;
+}
+
+export interface ConceptosNominaTable {
+  id: Generated<string>;
+  codigo: string;
+  nombre: string;
+  tipo: 'devengo' | 'deduccion';
+  activo: Generated<boolean>;
+  creado_en: Generated<Date>;
+}
+
+export interface LiquidacionesTable {
+  id: Generated<string>;
+  empleado_id: string;
+  periodo: string;
+  salario_base: NumericColumn;
+  total_devengos: NumericColumn;
+  total_deducciones: NumericColumn;
+  neto_a_pagar: NumericColumn;
+  detalle: ColumnType<object, string, string>;
+  creado_en: Generated<Date>;
+  actualizado_en: Generated<Date>;
 }
 
 export interface CitasTable {
@@ -118,6 +150,18 @@ export interface CitasTable {
   actualizado_en: Generated<Date>;
 }
 
+export interface AsientosTable {
+  id: Generated<string>;
+  fecha: Generated<Date>;
+  cuenta: string;
+  debito: NumericColumn;
+  credito: NumericColumn;
+  origen_id: string;
+  metodo_pago: string | null;
+  descripcion: string | null;
+  created_at: Generated<Date>;
+}
+
 export interface Database {
   usuarios: UsuariosTable;
   clientes: ClientesTable;
@@ -130,6 +174,10 @@ export interface Database {
   carritos: CarritosTable;
   carrito_items: CarritoItemsTable;
   carrito_comandos: CarritoComandosTable;
+  cajas: CajasTable;
+  asientos: AsientosTable;
+  conceptos_nomina: ConceptosNominaTable;
+  liquidaciones: LiquidacionesTable;
   empleados: EmpleadosTable;
   citas: CitasTable;
 }

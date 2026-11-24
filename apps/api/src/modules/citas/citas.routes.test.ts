@@ -106,6 +106,7 @@ describe('API de Citas', () => {
         email: 'laura@example.com',
         telefono: '3002223344',
         activo: true,
+        salario_base: 1500000,
       })
       .returning('id')
       .executeTakeFirstOrThrow();
@@ -117,6 +118,7 @@ describe('API de Citas', () => {
         email: null,
         telefono: null,
         activo: false,
+        salario_base: 1200000,
       })
       .returning('id')
       .executeTakeFirstOrThrow();

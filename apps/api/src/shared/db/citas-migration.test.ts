@@ -67,6 +67,7 @@ describe('Migración de Citas y Empleados', () => {
         email: null,
         telefono: null,
         activo: true,
+        salario_base: 1500000,
       })
       .returning('id')
       .executeTakeFirstOrThrow();
@@ -124,6 +125,11 @@ describe('Migración de Citas y Empleados', () => {
         cause: error,
       });
     }
+    // 0009_nomina, 0008_contabilidad y 0007_cajas se aplican después de 0006_citas.
+    // migrateDown() revierte una a la vez; revertimos hasta llegar a 0006.
+    await migrator.migrateDown();
+    await migrator.migrateDown();
+    await migrator.migrateDown();
 
     const tablasRevertidas = await sql<{ tabla: string | null }>`
       select to_regclass('citas')::text as tabla
