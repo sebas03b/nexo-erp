@@ -50,9 +50,11 @@ Distinción clave:
 | Chain of Responsibility | GoF (Fase 4) | Validaciones encadenables | `cadena-validacion.ts` | `ventas/domain/validation/cadena-validacion.ts` | Tests de validación | Implementado (preexistente) |
 | Strategy | GoF (Fase 3) | Sustitución de algoritmos | `pricing/*`, `payments/*` | `ventas/domain/pricing/*`, `ventas/domain/payments/*` | Tests de sustitución | Implementado (preexistente) |
 | Builder | GoF (Fase 4) | Construcción paso a paso | `factura.builder.ts` | `ventas/domain/factura.builder.ts` | Tests del Builder | Implementado (preexistente) |
-| Adapter | GoF | APIs externas | `integrations/*` | — | — | Pendiente |
-| Proxy | GoF | Permisos y caché | `permisos.proxy.ts`, `cache.proxy.ts` | — | — | Pendiente |
-| Chain de Nómina | GoF | Liquidaciones encadenadas | `cadena-liquidacion.ts` | — | — | Pendiente |
+| Adapter | GoF | APIs externas | `integrations/*` | `integrations/facturacion-electronica/adapter-mock.ts` | XML simulado, acuse de recibo, best-effort post-commit | Implementado (Fase 6) |
+| Proxy | GoF | Permisos y caché | `permisos.proxy.ts`, `cache.proxy.ts` | `modules/auth/permisos.proxy.ts`, `modules/inventario/cache.proxy.ts` | Pruebas de permisos por rol, caché con TTL | Implementado (Fase 8) |
+| Proxy — Permisos | GoF | Control de acceso por rol | `PermisosProxy` | `modules/auth/permisos.proxy.ts` | Pruebas de admin/cajero/contador con 403 | Implementado (Fase 8) |
+| Proxy — Caché | GoF | Caché de consultas frecuentes | `CacheProxy` | `modules/inventario/cache.proxy.ts` | Pruebas de caché con TTL, idempotencia | Implementado (Fase 8) |
+| Chain de Nómina | GoF | Liquidaciones encadenadas | `cadena-liquidacion.ts` | `modules/nomina/cadena-liquidacion.ts` | Pruebas de cadena de conceptos | Implementado (Fase 7) |
 | Caja / Contabilidad | Arquitectura | Asientos y cierres | `CajaService`, `ContabilidadService` | `ventas/caja/caja.service.ts`, `contabilidad/contabilidad.service.ts` | Apertura/cierre de caja, asientos de partida doble, reportes | Implementado (Fase 6) |
 | Repository — Caja | Arquitectura | Acceso a datos aislado para caja | `CajaRepository` | `ventas/caja/caja.repository.ts` | Pruebas de apertura, cierre, duplicidad, 400/404/409 | Implementado (Fase 6) |
 | Repository — Contabilidad | Arquitectura | Acceso a datos aislado para asientos y reportes | `ContabilidadRepository` | `contabilidad/contabilidad.repository.ts` | Pruebas de asientos, reporte por día/mes/año/medio de pago | Implementado (Fase 6) |
@@ -107,8 +109,12 @@ POST /api/citas/:id/confirmar
 | API — Contabilidad (asientos, reportes) | `apps/api/src/modules/contabilidad/contabilidad.routes.test.ts` | 5 |
 | Adapter — Facturación electrónica | `pos-checkout.facade.test.ts` (integración adapter) | 2 |
 | Web — Contabilidad (dashboard) | `apps/web/src/pages/Contabilidad.test.tsx` | 3 |
+| Proxy — Controles de acceso | `apps/api/src/modules/auth/permisos.proxy.test.ts` | 5 |
+| Proxy — Caché | `apps/api/src/modules/inventario/cache.proxy.test.ts` | 4 |
+| Web — Contabilidad (dashboard) | `apps/web/src/pages/Contabilidad.test.tsx` | 3 |
+| Web — Contabilidad (dashboard) | `apps/web/src/pages/Contabilidad.test.tsx` | 3 |
 
-Suite completa de la fase: 30 archivos / ~179 casos declarados (con los últimos ajustes web en verde).
+Suite completa de la fase: 44 archivos / ~240 casos declarados.
 
 ---
 
@@ -156,7 +162,38 @@ POST /api/ventas/checkout (post-commit)
 → Una falla del adapter NO revierte la venta (best-effort)
 ```
 
-## 9. Limitaciones conocidas
+## 9. Flujo de Autenticación y Autorización (Fase 8)
+
+```text
+POST /api/auth/login
+→ Valida credenciales contra usuarios
+→ Genera JWT firmado con HS256
+→ Crea sesión en tabla sesiones con expiración
+→ Devuelve token y datos de usuario
+
+POST /api/auth/registro
+→ Valida que el usuario no exista
+→ Hashea contraseña con scrypt
+→ Crea usuario con rol especificado
+→ Devuelve datos del usuario sin hash
+
+GET /api/caja/apertura (protegido por auth)
+→ Requiere header Authorization: Bearer <token>
+→ Verifica firma del token y expiración
+→ Inyecta usuarioId en request.usuario
+→ CajaService valida permisos de apertura
+```
+
+Control de acceso por roles (Proxy de permisos):
+- `admin`: acceso completo a todos los módulos
+- `cajero`: caja (abrir/cerrar), ventas (checkout), citas (confirmar/iniciar/completar/cancelar)
+- `contador`: contabilidad (reportes, asientos)
+
+El `PermisosProxy` intercepta llamadas a servicios sensibles y verifica que el rol del usuario autenticado tenga permiso para la operación solicitada. Si no tiene permiso, lanza error 403.
+
+El `CacheProxy` almacena en caché consultas frecuentes de productos con TTL configurable, evitando consultas repetidas a la base de datos.
+
+## 10. Limitaciones conocidas
 
 - Outbox sin worker de reintento posterior a reinicio.
 - `procesado_en` no se actualiza en el flujo productivo.
@@ -175,4 +212,8 @@ POST /api/ventas/checkout (post-commit)
 - Agregada trazabilidad de Fase 6: Contabilidad (dominio, partida doble, repositorio, servicio, rutas de reporte con agrupación día/mes/año/medio_pago, suscripción Observer a PedidoPagado, pruebas de integración y dominio).
 - Agregada trazabilidad de Fase 6: Adapter de facturación electrónica (mock, integración en PosCheckoutFacade post-commit, pruebas).
 - Agregada trazabilidad de Fase 6: Frontend dashboard de contabilidad (caja, reporte de ventas con agrupación, tabla de asientos, pruebas web).
+- Agregada trazabilidad de Fase 7: Nómina (Chain of Responsibility, cadena de conceptos, partida doble, rutas API, pruebas).
+- Agregada trazabilidad de Fase 8: Autenticación JWT, tabla usuarios y sesiones, rutas login/registro.
+- Agregada trazabilidad de Fase 8: Proxy de permisos (control de acceso por rol: admin/cajero/contador), Proxy de caché (TTL para consultas de productos).
+- Agregada trazabilidad de Fase 8: Frontend de autenticación (página de login, hook useAuth, protección de rutas, sidebar con usuario y cierre de sesión).
 - Documento marcado como **preliminar**; la versión final pertenece a Fase 9.
