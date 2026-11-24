@@ -34,8 +34,8 @@ export class NotificacionFactory {
       case 'whatsapp':
         return new WhatsAppSender();
       default: {
-        const _exhaustive: never = canal;
-        throw new Error(`Canal de notificación no soportado: ${_exhaustive}`);
+        const canalInvalido: string = canal;
+        throw new Error(`Canal de notificación no soportado: ${canalInvalido}`);
       }
     }
   }

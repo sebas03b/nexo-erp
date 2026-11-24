@@ -1,7 +1,7 @@
 // Patrón: Observer
 
 import type { CanalPreferido } from '../clientes/clientes.types.js';
-import { NotificacionFactory } from './notificacion.factory.js';
+import type { NotificacionFactory } from './notificacion.factory.js';
 
 export interface Destinatario {
   nombre: string;

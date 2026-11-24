@@ -12,11 +12,7 @@ import type { Comando } from './commands/comando.js';
 import { DecrementarItemCommand } from './commands/decrementar-item.command.js';
 import { EstablecerCantidadCommand } from './commands/establecer-cantidad.command.js';
 import { QuitarItemCommand } from './commands/quitar-item.command.js';
-import {
-  CarritoRepository,
-  type ComandoCarritoPersistido,
-  type TipoComandoCarrito,
-} from './carrito.repository.js';
+import type { CarritoRepository, ComandoCarritoPersistido, TipoComandoCarrito } from './carrito.repository.js';
 
 export type AccionCarrito =
   | 'AGREGAR_ITEM'

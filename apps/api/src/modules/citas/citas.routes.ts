@@ -1,7 +1,7 @@
 import type { FastifyPluginCallback } from 'fastify';
 import { z } from 'zod';
 
-import type { AccionCita, CitasService } from './citas.service.js';
+import type { CitasService } from './citas.service.js';
 
 const crearCitaSchema = z
   .object({
@@ -71,7 +71,7 @@ export const citasRoutes: FastifyPluginCallback<CitasRoutesOptions> = (
     async (request) => {
       const { id } = citaParamsSchema.parse(request.params);
       const { accion } = accionSchema.parse(request.body);
-      const cita = await service.cambiarEstado(id, accion as AccionCita);
+      const cita = await service.cambiarEstado(id, accion);
       return cita.toJSON();
     },
   );

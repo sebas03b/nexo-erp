@@ -249,7 +249,7 @@ function instalarFetch(
       }
 
       if (url === '/api/pedidos' && init?.method === 'POST') {
-        const body = init?.body ? JSON.parse(init.body as string) : null;
+        const body = init?.body ? (JSON.parse(init.body as string) as { carritoId?: string }) : null;
         return Promise.resolve(
           respuestaJson({ ...pedidoPagado, estado: 'Borrador', total: carritoActual?.total ?? 100, carritoId: body?.carritoId }, 201),
         );
@@ -283,7 +283,7 @@ function instalarFetch(
       }
 
       if (url === '/api/ventas/checkout' && init?.method === 'POST') {
-        const body = init?.body ? JSON.parse(init.body as string) : null;
+        const body = init?.body ? (JSON.parse(init.body as string) as { metodoPago?: string }) : null;
         return Promise.resolve(
           respuestaJson({
             pedido: { ...pedidoPagado, id: PEDIDO_ID, estado: 'Pagado', total: carritoActual?.total ?? 100 },

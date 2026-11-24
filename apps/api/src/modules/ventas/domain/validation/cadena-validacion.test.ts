@@ -9,8 +9,8 @@ import {
 } from './cadena-validacion.js';
 
 function crearContexto(sobreescritos: Partial<ValidacionContexto> = {}): ValidacionContexto {
-  const verificarCliente = sobreescritos.verificarCliente ?? (async () => ({ id: 'cliente-1' }));
-  const verificarStock = sobreescritos.verificarStock ?? (async () => true);
+  const verificarCliente = sobreescritos.verificarCliente ?? (() => Promise.resolve({ id: 'cliente-1' }));
+  const verificarStock = sobreescritos.verificarStock ?? (() => Promise.resolve(true));
 
   return {
     documentoCliente: '123',
@@ -36,7 +36,7 @@ describe('Patrón Chain of Responsibility - validación de checkout', () => {
     cadena.agregar(new ValidarStockSuficiente());
 
     await expect(
-      cadena.ejecutar(crearContexto({ verificarCliente: async () => null })),
+      cadena.ejecutar(crearContexto({ verificarCliente: () => Promise.resolve(null) })),
     ).rejects.toMatchObject({ code: 'CLIENTE_NO_ENCONTRADO' });
   });
 
@@ -46,7 +46,7 @@ describe('Patrón Chain of Responsibility - validación de checkout', () => {
     cadena.agregar(new ValidarStockSuficiente());
 
     await expect(
-      cadena.ejecutar(crearContexto({ verificarStock: async () => false })),
+      cadena.ejecutar(crearContexto({ verificarStock: () => Promise.resolve(false) })),
     ).rejects.toMatchObject({ code: 'STOCK_INSUFICIENTE' });
   });
 
@@ -55,15 +55,16 @@ describe('Patrón Chain of Responsibility - validación de checkout', () => {
     const cadena = new CadenaValidacion();
 
     const eslabon1: EslabonValidacion = {
-      validar: async () => {
+      validar: () => {
         orden.push('primero');
-        throw new Error('error en primero');
+        return Promise.reject(new Error('error en primero'));
       },
       establecerSiguiente: () => eslabon1,
     };
     const eslabon2: EslabonValidacion = {
-      validar: async () => {
+      validar: () => {
         orden.push('segundo');
+        return Promise.resolve();
       },
       establecerSiguiente: () => eslabon2,
     };

@@ -9,10 +9,12 @@ import { registrarSuscripcionesNotificaciones } from './suscripciones.js';
 describe('Suscripciones de notificaciones (Observer)', () => {
   it('publicar CitaConfirmada con cliente email envía [Email]', async () => {
     const bus = new InMemoryEventBus<AppEventMap>();
-    const servicio = new ServicioNotificaciones(new NotificacionFactory(), async () => ({
-      nombre: 'Ana',
-      canalPreferido: 'email',
-    }));
+    const servicio = new ServicioNotificaciones(new NotificacionFactory(), () =>
+      Promise.resolve({
+        nombre: 'Ana',
+        canalPreferido: 'email' as const,
+      }),
+    );
     registrarSuscripcionesNotificaciones(bus, servicio);
 
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -32,10 +34,12 @@ describe('Suscripciones de notificaciones (Observer)', () => {
   it('cambia a whatsapp según canal del destinatario sin tocar suscriptor', async () => {
     const bus = new InMemoryEventBus<AppEventMap>();
     let canal: 'email' | 'sms' | 'whatsapp' = 'email';
-    const servicio = new ServicioNotificaciones(new NotificacionFactory(), async () => ({
-      nombre: 'Ana',
-      canalPreferido: canal,
-    }));
+    const servicio = new ServicioNotificaciones(new NotificacionFactory(), () =>
+      Promise.resolve({
+        nombre: 'Ana',
+        canalPreferido: canal,
+      }),
+    );
     registrarSuscripcionesNotificaciones(bus, servicio);
 
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -54,10 +58,12 @@ describe('Suscripciones de notificaciones (Observer)', () => {
 
   it('publicar PedidoPagado envía comprobante', async () => {
     const bus = new InMemoryEventBus<AppEventMap>();
-    const servicio = new ServicioNotificaciones(new NotificacionFactory(), async () => ({
-      nombre: 'Ana',
-      canalPreferido: 'sms',
-    }));
+    const servicio = new ServicioNotificaciones(new NotificacionFactory(), () =>
+      Promise.resolve({
+        nombre: 'Ana',
+        canalPreferido: 'sms' as const,
+      }),
+    );
     registrarSuscripcionesNotificaciones(bus, servicio);
 
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -77,7 +83,7 @@ describe('Suscripciones de notificaciones (Observer)', () => {
 
   it('cliente inexistente no envía ni lanza', async () => {
     const bus = new InMemoryEventBus<AppEventMap>();
-    const servicio = new ServicioNotificaciones(new NotificacionFactory(), async () => null);
+    const servicio = new ServicioNotificaciones(new NotificacionFactory(), () => Promise.resolve(null));
     registrarSuscripcionesNotificaciones(bus, servicio);
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
 
@@ -98,11 +104,10 @@ describe('Suscripciones de notificaciones (Observer)', () => {
   it('un handler que lanza no impide el otro', async () => {
     const bus = new InMemoryEventBus<AppEventMap>();
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-    bus.subscribe('CitaConfirmada', async () => {
-      throw new Error('boom');
-    });
-    bus.subscribe('CitaConfirmada', async () => {
+    bus.subscribe('CitaConfirmada', () => Promise.reject(new Error('boom')));
+    bus.subscribe('CitaConfirmada', () => {
       console.log('ok');
+      return Promise.resolve();
     });
 
     const result = await bus.publish('CitaConfirmada', {

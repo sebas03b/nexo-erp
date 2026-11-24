@@ -8,16 +8,16 @@ import type { PagoStrategy } from '../domain/payments/pago.strategy.js';
 import type { CadenaValidacion } from '../domain/validation/cadena-validacion.js';
 import type { CarritoRepository } from './carrito.repository.js';
 import type { VentasRepository } from '../ventas.repository.js';
-import type { EstrategiasVentas, MetodoPago } from '../ventas.service.js';
+import type { EstrategiasVentas } from '../ventas.service.js';
 import { PosCheckoutFacade } from './pos-checkout.facade.js';
 
 const CARRITO_ID = '11111111-1111-4111-8111-111111111111';
 
 const clientes = {
-  obtenerPorDocumento: async (): Promise<{
+  obtenerPorDocumento: (): Promise<{
     id: string;
     esClienteFrecuente?: boolean;
-  } | null> => ({ id: 'cliente-1', esClienteFrecuente: false }),
+  } | null> => Promise.resolve({ id: 'cliente-1', esClienteFrecuente: false }),
 };
 
 const descuentoMock: DescuentoStrategy = {
@@ -32,12 +32,13 @@ const impuestoMock: ImpuestoStrategy = {
 
 const pagoEfectivoMock: PagoStrategy = {
   metodo: 'efectivo',
-  cobrar: async ({ monto }: { monto: number }) => ({
-    metodo: 'efectivo',
-    monto,
-    cambio: 0,
-    referencia: 'EFECTIVO-1',
-  }),
+  cobrar: ({ monto }: { monto: number }) =>
+    Promise.resolve({
+      metodo: 'efectivo' as const,
+      monto,
+      cambio: 0,
+      referencia: 'EFECTIVO-1',
+    }),
 };
 
 const estrategias: EstrategiasVentas = {
@@ -46,36 +47,35 @@ const estrategias: EstrategiasVentas = {
   pagos: {
     efectivo: pagoEfectivoMock,
     pasarela: pagoEfectivoMock,
-  } as Readonly<Record<MetodoPago, PagoStrategy>>,
+  },
 };
 
 const repository = {
-  crearPedido: async () => {},
-  actualizarEstado: async () => true,
-  siguienteNumeroFactura: async () => 'FAC-001',
-  crearFactura: async () => {},
-  listarPedidos: async () => [],
-  obtenerPedido: async () => {
-    throw new Error('no se usa en esta prueba');
-  },
-  obtenerPedidoDetalle: async () => undefined,
-  eliminarPedido: async () => true,
-  listarFacturas: async () => [],
-  obtenerFactura: async () => undefined,
-  obtenerFacturaPorPedido: async () => undefined,
+  crearPedido: () => Promise.resolve(),
+  actualizarEstado: () => Promise.resolve(true),
+  siguienteNumeroFactura: () => Promise.resolve('FAC-001'),
+  crearFactura: () => Promise.resolve(),
+  listarPedidos: () => Promise.resolve([]),
+  obtenerPedido: () => Promise.reject(new Error('no se usa en esta prueba')),
+  obtenerPedidoDetalle: () => Promise.resolve(undefined),
+  eliminarPedido: () => Promise.resolve(true),
+  listarFacturas: () => Promise.resolve([]),
+  obtenerFactura: () => Promise.resolve(undefined),
+  obtenerFacturaPorPedido: () => Promise.resolve(undefined),
 } as unknown as VentasRepository;
 
 function crearCarritoRepository(items = [{ productoId: 'producto-1', cantidad: 2, precioUnitario: 100 }]) {
   const estado = { cerrado: false };
   const repo = {
-    obtenerCarrito: async () => ({
-      id: CARRITO_ID,
-      estado: estado.cerrado ? 'Cerrado' : 'Abierto',
-      items,
-    }),
-    actualizarEstado: async (_db: unknown, _id: string, nuevoEstado: string) => {
+    obtenerCarrito: () =>
+      Promise.resolve({
+        id: CARRITO_ID,
+        estado: estado.cerrado ? 'Cerrado' : 'Abierto',
+        items,
+      }),
+    actualizarEstado: (_db: unknown, _id: string, nuevoEstado: string) => {
       if (nuevoEstado === 'Cerrado') estado.cerrado = true;
-      return true;
+      return Promise.resolve(true);
     },
   } as unknown as CarritoRepository;
   return { repo, estado };
@@ -96,20 +96,20 @@ function crearDbMock(
     selectFrom: (table: string) => ({
       select: (_col: string) => ({
         where: (_col2: string, _op: string, value: string) => ({
-          executeTakeFirst: async () => {
+          executeTakeFirst: () => {
             if (table === 'productos') {
               const row = productoRows.find((p) => p.id === value);
-              return row ? { precio: row.precio } : undefined;
+              return Promise.resolve(row ? { precio: row.precio } : undefined);
             }
             if (table === 'stock') {
               const row = stockState.find((s) => s.producto_id === value);
-              return row ? { cantidad: row.cantidad } : undefined;
+              return Promise.resolve(row ? { cantidad: row.cantidad } : undefined);
             }
             if (table === 'clientes') {
               const row = clientes.find((c) => c.documento === value || c.id === value);
-              return row ? { id: row.id } : undefined;
+              return Promise.resolve(row ? { id: row.id } : undefined);
             }
-            return undefined;
+            return Promise.resolve(undefined);
           },
         }),
       }),
@@ -117,11 +117,12 @@ function crearDbMock(
     updateTable: (table: string) => ({
       set: (values: { cantidad: number }) => ({
         where: (_col: string, _op: string, value: string) => ({
-          execute: async () => {
+          execute: () => {
             if (table === 'stock') {
               const row = stockState.find((s) => s.producto_id === value);
               if (row) row.cantidad = values.cantidad;
             }
+            return Promise.resolve();
           },
         }),
       }),
@@ -143,8 +144,9 @@ function crearUnitOfWork(
       const context: UnitOfWorkContext<AppEventMap> = {
         db: db as UnitOfWorkContext<AppEventMap>['db'],
         correlationId: 'test',
-        publish: async (_tipo: string, _payload: unknown): Promise<void> => {
+        publish: (_tipo: string, _payload: unknown): Promise<void> => {
           eventos.push({ tipo: _tipo, payload: _payload });
+          return Promise.resolve();
         },
       };
       return work(context);
@@ -153,10 +155,10 @@ function crearUnitOfWork(
 }
 
 const cadenaValidacion = {
-  ejecutar: async () => {},
+  ejecutar: () => Promise.resolve(),
 } as unknown as CadenaValidacion;
 
-const verificarStock = async (): Promise<boolean> => true;
+const verificarStock = (): Promise<boolean> => Promise.resolve(true);
 
 describe('Patrón Facade - checkout POS', () => {
   it('debe ejecutar todo el flujo de venta dentro de una transacción', async () => {
@@ -195,8 +197,8 @@ describe('Patrón Facade - checkout POS', () => {
   it('debe rechazar el checkout si el carrito no existe', async () => {
     const eventos: Array<{ tipo: string; payload: unknown }> = [];
     const repo = {
-      obtenerCarrito: async () => undefined,
-      actualizarEstado: async () => true,
+      obtenerCarrito: () => Promise.resolve(undefined),
+      actualizarEstado: () => Promise.resolve(true),
     } as unknown as CarritoRepository;
     const { db } = crearDbMock([], []);
 

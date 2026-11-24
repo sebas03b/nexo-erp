@@ -44,7 +44,7 @@ export class CitasRepository {
       .returningAll()
       .executeTakeFirstOrThrow();
 
-    return mapCita(row as CitaRow);
+    return mapCita(row);
   }
 
   async obtener(db: Executor, id: string): Promise<Cita | undefined> {
@@ -54,7 +54,7 @@ export class CitasRepository {
       .where('id', '=', id)
       .executeTakeFirst();
 
-    return row ? mapCita(row as CitaRow) : undefined;
+    return row ? mapCita(row) : undefined;
   }
 
   async listar(db: Executor, desde?: Date, hasta?: Date): Promise<Cita[]> {

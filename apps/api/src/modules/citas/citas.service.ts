@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { UnitOfWork } from '../../shared/db/unit-of-work.js';
 import { DomainError, RecursoNoEncontrado } from '../../shared/errors/domain-error.js';
 import type { AppEventMap } from '../../shared/events/app-event-map.js';
-import { CitasRepository } from './citas.repository.js';
+import type { CitasRepository } from './citas.repository.js';
 import { Cita } from './domain/cita.js';
 
 export type AccionCita = 'confirmar' | 'iniciar' | 'completar' | 'cancelar';

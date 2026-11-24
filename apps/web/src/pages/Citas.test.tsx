@@ -30,12 +30,12 @@ describe('Agenda de Citas', () => {
 
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = typeof input === 'string' ? input : input.toString();
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
         const method = init?.method ?? 'GET';
 
         if (url.endsWith('/api/clientes') && method === 'GET') {
-          return Response.json([
+          return Promise.resolve(Response.json([
             {
               id: 'cli-1',
               nombre: 'Ana',
@@ -44,48 +44,48 @@ describe('Agenda de Citas', () => {
               telefono: null,
               canalPreferido: 'email',
             },
-          ]);
+          ]));
         }
         if (url.endsWith('/api/citas') && method === 'GET') {
-          return Response.json(citas);
+          return Promise.resolve(Response.json(citas));
         }
         if (url.endsWith('/api/citas/cita-1/estado') && method === 'PATCH') {
-          const body = JSON.parse(String(init?.body)) as { accion: string };
+          const body = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as { accion: string };
           const actual = citas[0];
           if (!actual) {
-            return Response.json({ error: { message: 'No encontrada' } }, { status: 404 });
+            return Promise.resolve(Response.json({ error: { message: 'No encontrada' } }, { status: 404 }));
           }
 
           if (body.accion === 'confirmar') {
             if (actual.estado !== 'Pendiente') {
-              return Response.json(
+              return Promise.resolve(Response.json(
                 { error: { code: 'TRANSICION_INVALIDA', message: `Transición de cita inválida: ${actual.estado} → Confirmada` } },
                 { status: 409 },
-              );
+              ));
             }
             citas[0] = { ...actual, estado: 'Confirmada' };
           } else if (body.accion === 'completar') {
             if (actual.estado !== 'Confirmada' && actual.estado !== 'En Proceso') {
-              return Response.json(
+              return Promise.resolve(Response.json(
                 { error: { code: 'TRANSICION_INVALIDA', message: `Transición de cita inválida: ${actual.estado} → Completada` } },
                 { status: 409 },
-              );
+              ));
             }
             citas[0] = { ...actual, estado: 'Completada' };
           } else if (body.accion === 'cancelar') {
             if (actual.estado === 'Completada' || actual.estado === 'Cancelada') {
-              return Response.json(
+              return Promise.resolve(Response.json(
                 { error: { code: 'TRANSICION_INVALIDA', message: `Transición de cita inválida: ${actual.estado} → Cancelada` } },
                 { status: 409 },
-              );
+              ));
             }
             citas[0] = { ...actual, estado: 'Cancelada' };
           }
 
-          return Response.json(citas[0]);
+          return Promise.resolve(Response.json(citas[0]));
         }
 
-        return Response.json({ error: { message: `No mock: ${method} ${url}` } }, { status: 500 });
+        return Promise.resolve(Response.json({ error: { message: `No mock: ${method} ${url}` } }, { status: 500 }));
       }),
     );
   });
