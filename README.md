@@ -1,8 +1,9 @@
 # Nexo-ERP
 
 Monorepo de Nexo-ERP. La arquitectura y las reglas de trabajo están descritas en
-[`AGENTS.md`](./AGENTS.md), y el estado de avance por fases en
-[`docs/plan.md`](./docs/plan.md).
+[`AGENTS.md`](./AGENTS.md), el estado de avance por fases en
+[`docs/plan.md`](./docs/plan.md) y el estado verificable de la implementación en
+[`docs/estado-construccion.md`](./docs/estado-construccion.md).
 
 ## Requisitos
 
