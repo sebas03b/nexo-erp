@@ -55,7 +55,11 @@ export function Layout(): JSX.Element {
   return (
     <div className="app-layout">
       <aside className="sidebar">
-        <NavLink to="/ventas" className="sidebar-marca sidebar-logo-contenedor">
+        <NavLink
+          to="/"
+          aria-label="Ir al inicio"
+          className="sidebar-marca sidebar-logo-contenedor"
+        >
           <img src={logoSidebar} alt="Nexo-ERP" className="sidebar-logo" />
         </NavLink>
 
@@ -63,7 +67,7 @@ export function Layout(): JSX.Element {
           <p className="sidebar-seccion">Módulos</p>
           {enlaces.map((enlace) => (
             <NavLink
-              key={enlace.to}
+              key={`${enlace.to}-${enlace.etiqueta}`}
               to={enlace.to}
               className={({ isActive }) => {
                 const esFicticio = enlace.to === '#';

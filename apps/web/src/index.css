@@ -143,6 +143,27 @@ body {
   gap: 1.5rem;
 }
 
+.inicio-pagina {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.75rem;
+  min-height: 60vh;
+  text-align: center;
+}
+
+.inicio-titulo {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.1;
+}
+
+.inicio-instruccion {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 1.05rem;
+}
+
 .pagina-header {
   display: grid;
   gap: 0.35rem;

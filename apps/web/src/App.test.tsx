@@ -315,7 +315,7 @@ async function abrirNuevaVenta(): Promise<void> {
 
 describe('App', () => {
   beforeEach(() => {
-    window.history.replaceState({}, '', '/');
+    window.history.replaceState({}, '', '/ventas');
     instalarFetch();
   });
 
@@ -384,7 +384,7 @@ describe('App', () => {
     expect(within(items).getByText(PRODUCTO_NOMBRE)).toBeInTheDocument();
     expect(within(items).queryByText(PRODUCTO_ID)).not.toBeInTheDocument();
     expect(within(items).getByText('2')).toBeInTheDocument();
-    expect(within(items).getByText(/100,00/)).toBeInTheDocument();
+    expect(within(items).getByText(/\$\s*100(?:[.,]00)?/)).toBeInTheDocument();
 
     fireEvent.click(within(dialogo).getByRole('button', { name: 'Cerrar' }));
 
@@ -805,5 +805,53 @@ describe('App', () => {
       'aria-current',
       'page',
     );
+  });
+
+  describe('página de inicio', () => {
+    beforeEach(() => {
+      window.history.replaceState({}, '', '/');
+    });
+
+    it('muestra el mensaje de bienvenida al lanzar la aplicación', () => {
+      render(<App />);
+
+      expect(
+        screen.getByRole('heading', { level: 1, name: 'Bienvenido/a' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('selecciona un módulo para iniciar'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('heading', { name: 'Historial de ventas' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('no incluye el inicio en la barra lateral de módulos', () => {
+      render(<App />);
+
+      const navegacion = screen.getByRole('navigation', {
+        name: 'Navegación principal',
+      });
+      expect(
+        within(navegacion).queryByRole('link', { name: /inicio/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        within(navegacion).getByRole('link', { name: 'Ventas' }),
+      ).toBeInTheDocument();
+    });
+
+    it('vuelve al inicio al hacer clic en el logo', () => {
+      window.history.replaceState({}, '', '/productos');
+      render(<App />);
+
+      fireEvent.click(screen.getByRole('link', { name: 'Ir al inicio' }));
+
+      expect(
+        screen.getByRole('heading', { level: 1, name: 'Bienvenido/a' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('heading', { level: 2, name: 'Productos y Stock' }),
+      ).not.toBeInTheDocument();
+    });
   });
 });

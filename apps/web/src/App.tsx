@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Citas } from './pages/Citas';
 import { Clientes } from './pages/Clientes';
+import { Inicio } from './pages/Inicio';
 import { ListadoVentas } from './pages/ListadoVentas';
 import { NuevaVenta } from './pages/NuevaVenta';
 import { Productos } from './pages/Productos';
@@ -13,7 +14,7 @@ export function App(): JSX.Element {
     <BrowserRouter>
       <Routes>
         <Route element={<Layout />}>
-          <Route index element={<Navigate to="/ventas" replace />} />
+          <Route index element={<Inicio />} />
           <Route path="/ventas" element={<ListadoVentas />} />
           <Route path="/ventas/nueva" element={<NuevaVenta />} />
           <Route path="/productos" element={<Productos />} />
