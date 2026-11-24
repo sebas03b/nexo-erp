@@ -83,9 +83,12 @@ export function Citas(): JSX.Element {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [cargando, setCargando] = useState(true);
-  const [catalogosCargando, setCatalogosCargando] = useState(true);
-  const [catalogosError, setCatalogosError] = useState<string | null>(null);
-  const [recargaCatalogos, setRecargaCatalogos] = useState(0);
+  const [clientesCargando, setClientesCargando] = useState(true);
+  const [empleadosCargando, setEmpleadosCargando] = useState(true);
+  const [clientesError, setClientesError] = useState<string | null>(null);
+  const [empleadosError, setEmpleadosError] = useState<string | null>(null);
+  const [recargaClientes, setRecargaClientes] = useState(0);
+  const [recargaEmpleados, setRecargaEmpleados] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [errorAccion, setErrorAccion] = useState<string | null>(null);
   const [fechaFiltro, setFechaFiltro] = useState('');
@@ -149,57 +152,64 @@ export function Citas(): JSX.Element {
   useEffect(() => {
     let activo = true;
 
-    async function cargarCatalogos(): Promise<void> {
-      setCatalogosCargando(true);
-      setCatalogosError(null);
+    setClientesCargando(true);
+    setClientesError(null);
 
-      const [resultadoClientes, resultadoEmpleados] = await Promise.allSettled([
-        obtenerJson<Cliente[]>('/api/clientes'),
-        obtenerJson<Empleado[]>('/api/empleados'),
-      ]);
-
-      if (!activo) {
-        return;
-      }
-
-      const errores: string[] = [];
-
-      if (resultadoClientes.status === 'fulfilled') {
-        setClientes(resultadoClientes.value);
-      } else {
-        setClientes([]);
-        errores.push(
-          mensajeDeError(
-            resultadoClientes.reason,
-            'No se pudieron cargar los clientes',
-          ),
-        );
-      }
-
-      if (resultadoEmpleados.status === 'fulfilled') {
-        setEmpleados(resultadoEmpleados.value);
-      } else {
-        setEmpleados([]);
-        errores.push(
-          mensajeDeError(
-            resultadoEmpleados.reason,
-            'No se pudieron cargar los empleados',
-          ),
-        );
-      }
-
-      setCatalogosError(
-        errores.length > 0 ? errores.join(' ') : null,
-      );
-      setCatalogosCargando(false);
-    }
-
-    void cargarCatalogos();
+    void obtenerJson<Cliente[]>('/api/clientes')
+      .then((catalogo) => {
+        if (activo) {
+          setClientes(catalogo);
+        }
+      })
+      .catch((caught: unknown) => {
+        if (activo) {
+          setClientes([]);
+          setClientesError(
+            mensajeDeError(caught, 'No se pudieron cargar los clientes'),
+          );
+        }
+      })
+      .finally(() => {
+        if (activo) {
+          setClientesCargando(false);
+        }
+      });
 
     return () => {
       activo = false;
     };
-  }, [recargaCatalogos]);
+  }, [recargaClientes]);
+
+  useEffect(() => {
+    let activo = true;
+
+    setEmpleadosCargando(true);
+    setEmpleadosError(null);
+
+    void obtenerJson<Empleado[]>('/api/empleados')
+      .then((catalogo) => {
+        if (activo) {
+          setEmpleados(catalogo);
+        }
+      })
+      .catch((caught: unknown) => {
+        if (activo) {
+          setEmpleados([]);
+          setEmpleadosError(
+            mensajeDeError(caught, 'No se pudieron cargar los empleados'),
+          );
+        }
+      })
+      .finally(() => {
+        if (activo) {
+          setEmpleadosCargando(false);
+        }
+      });
+
+    return () => {
+      activo = false;
+    };
+  }, [recargaEmpleados]);
 
   useEffect(() => {
     operacionRef.current = operacion;
@@ -258,6 +268,8 @@ export function Citas(): JSX.Element {
       const ultimoFocoActual = focusablesActuales.at(-1);
 
       if (!primerFocoActual || !ultimoFocoActual) {
+        event.preventDefault();
+        modalElement.focus();
         return;
       }
 
@@ -376,6 +388,8 @@ export function Citas(): JSX.Element {
         ),
       );
     } catch (caught) {
+      let mensaje = mensajeDeError(caught, 'No se pudo actualizar la cita');
+
       if (
         caught instanceof ApiError &&
         caught.code === 'CONFLICTO_ESTADO_CITA'
@@ -389,22 +403,23 @@ export function Citas(): JSX.Element {
               actual.id === cita.id ? reconciliada : actual,
             ),
           );
-        } catch {
-          setCitas((actuales) =>
-            actuales.filter((actual) => actual.id !== cita.id),
-          );
+        } catch (reconciliacionFallida: unknown) {
+          mensaje = `No se pudo verificar el estado actual de la cita: ${mensajeDeError(
+            reconciliacionFallida,
+            'error de red',
+          )}`;
         }
       }
 
-      setErrorAccion(
-        mensajeDeError(caught, 'No se pudo actualizar la cita'),
-      );
+      setErrorAccion(mensaje);
     } finally {
       setOperacion(null);
     }
   }
 
   const empleadosActivos = empleados.filter((empleado) => empleado.activo);
+  const catalogosCargando = clientesCargando || empleadosCargando;
+  const catalogosError = clientesError !== null || empleadosError !== null;
 
   return (
     <div className="pagina">
@@ -422,7 +437,10 @@ export function Citas(): JSX.Element {
           className="boton-primario"
           onClick={abrirModal}
           disabled={
-            catalogosCargando || catalogosError !== null || operacion !== null
+            cargando ||
+            catalogosCargando ||
+            catalogosError ||
+            operacion !== null
           }
         >
           Nueva cita
@@ -435,21 +453,42 @@ export function Citas(): JSX.Element {
         </p>
       ) : null}
 
-      {catalogosCargando ? (
+      {clientesCargando ? (
         <p role="status" aria-live="polite" className="app-description">
-          Cargando clientes y empleados…
+          Cargando clientes…
         </p>
       ) : null}
 
-      {catalogosError ? (
+      {empleadosCargando ? (
+        <p role="status" aria-live="polite" className="app-description">
+          Cargando empleados…
+        </p>
+      ) : null}
+
+      {clientesError ? (
         <div role="alert" className="alert alert-error catalogo-error">
-          <span>{catalogosError}</span>
+          <span>{clientesError}</span>
           <button
             type="button"
             className="boton-secundario boton-compacto"
-            onClick={() => setRecargaCatalogos((valor) => valor + 1)}
+            disabled={operacion !== null || clientesCargando}
+            onClick={() => setRecargaClientes((valor) => valor + 1)}
           >
-            Reintentar catálogos
+            Reintentar clientes
+          </button>
+        </div>
+      ) : null}
+
+      {empleadosError ? (
+        <div role="alert" className="alert alert-error catalogo-error">
+          <span>{empleadosError}</span>
+          <button
+            type="button"
+            className="boton-secundario boton-compacto"
+            disabled={operacion !== null || empleadosCargando}
+            onClick={() => setRecargaEmpleados((valor) => valor + 1)}
+          >
+            Reintentar empleados
           </button>
         </div>
       ) : null}
@@ -498,7 +537,7 @@ export function Citas(): JSX.Element {
           <p role="status" aria-live="polite" className="app-empty">
             Cargando agenda…
           </p>
-        ) : citas.length === 0 ? (
+        ) : error !== null ? null : citas.length === 0 ? (
           <p className="app-empty">No hay citas para mostrar.</p>
         ) : (
           <div
@@ -583,6 +622,7 @@ export function Citas(): JSX.Element {
             role="dialog"
             aria-modal="true"
             aria-labelledby="nueva-cita-titulo"
+            tabIndex={-1}
           >
             <div className="modal-header">
               <h3 id="nueva-cita-titulo" className="seccion-titulo">
@@ -687,7 +727,10 @@ export function Citas(): JSX.Element {
                 >
                   Cancelar
                 </button>
-                <button type="submit" disabled={operacion === 'crear'}>
+                <button
+                  type="submit"
+                  disabled={operacion === 'crear' || cargando}
+                >
                   {operacion === 'crear' ? 'Guardando…' : 'Crear cita'}
                 </button>
               </div>

@@ -134,6 +134,11 @@ interface OpcionesMock {
   errorAgendaConFiltro?: string;
   errorClientes?: string;
   errorEmpleados?: string;
+  errorDetalle?: string;
+  fallarClientesPrimeraVez?: boolean;
+  fallarEmpleadosPrimeraVez?: boolean;
+  retrasarClientes?: boolean;
+  retrasarEmpleados?: boolean;
   errorCrear?: string;
   errorTransicion?: string;
   codigoErrorTransicion?: string;
@@ -145,6 +150,8 @@ interface OpcionesMock {
 
 function instalarFetch(opciones: OpcionesMock = {}): ReturnType<typeof vi.fn> {
   let citas = [...(opciones.citas ?? [CITA_PENDIENTE])];
+  let intentosClientes = 0;
+  let intentosEmpleados = 0;
 
   const fetchMock = vi.fn(
     (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -192,26 +199,56 @@ function instalarFetch(opciones: OpcionesMock = {}): ReturnType<typeof vi.fn> {
       }
 
       if (ruta === '/api/clientes') {
-        if (opciones.errorClientes) {
+        intentosClientes += 1;
+
+        if (
+          opciones.errorClientes ||
+          (opciones.fallarClientesPrimeraVez && intentosClientes === 1)
+        ) {
           return Promise.resolve(
             respuestaJson(
-              { error: { message: opciones.errorClientes } },
+              {
+                error: {
+                  message:
+                    opciones.errorClientes ??
+                    'No se pudieron cargar los clientes',
+                },
+              },
               500,
             ),
           );
+        }
+
+        if (opciones.retrasarClientes) {
+          return new Promise<Response>(() => {});
         }
 
         return Promise.resolve(respuestaJson([CLIENTE]));
       }
 
       if (ruta === '/api/empleados') {
-        if (opciones.errorEmpleados) {
+        intentosEmpleados += 1;
+
+        if (
+          opciones.errorEmpleados ||
+          (opciones.fallarEmpleadosPrimeraVez && intentosEmpleados === 1)
+        ) {
           return Promise.resolve(
             respuestaJson(
-              { error: { message: opciones.errorEmpleados } },
+              {
+                error: {
+                  message:
+                    opciones.errorEmpleados ??
+                    'No se pudieron cargar los empleados',
+                },
+              },
               500,
             ),
           );
+        }
+
+        if (opciones.retrasarEmpleados) {
+          return new Promise<Response>(() => {});
         }
 
         return Promise.resolve(respuestaJson([EMPLEADO, EMPLEADO_INACTIVO]));
@@ -251,6 +288,15 @@ function instalarFetch(opciones: OpcionesMock = {}): ReturnType<typeof vi.fn> {
 
       const detalle = /^\/api\/citas\/([^/]+)$/.exec(ruta);
       if (detalle && (!init?.method || init.method === 'GET')) {
+        if (opciones.errorDetalle) {
+          return Promise.resolve(
+            respuestaJson(
+              { error: { message: opciones.errorDetalle } },
+              500,
+            ),
+          );
+        }
+
         const id = detalle[1];
         const cita = citas.find((item) => item.id === id);
         return Promise.resolve(
@@ -624,6 +670,35 @@ describe('Agenda de citas', () => {
     expect(fetchMock).toHaveBeenCalledWith(`/api/citas/${CITA_PENDIENTE.id}`);
   });
 
+  it('conserva la cita visible cuando falla la reconciliación del conflicto', async () => {
+    const fetchMock = instalarFetch({
+      errorTransicion: 'La cita cambió de estado',
+      codigoErrorTransicion: 'CONFLICTO_ESTADO_CITA',
+      estadoConcurrente: 'Confirmada',
+      errorDetalle: 'No se pudo consultar la cita',
+    });
+
+    render(<Citas />);
+
+    await screen.findByText(CLIENTE.nombre);
+    const fila = filaDe(CLIENTE.nombre);
+    fireEvent.click(
+      within(fila).getByRole('button', {
+        name: `Confirmar cita de ${CLIENTE.nombre}`,
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        'No se pudo verificar el estado actual de la cita: No se pudo consultar la cita',
+      ),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(fila).getByText('Pendiente')).toBeInTheDocument(),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(`/api/citas/${CITA_PENDIENTE.id}`);
+  });
+
   it('filtra la agenda por el rango diario de Bogotá', async () => {
     const fetchMock = instalarFetch();
 
@@ -641,7 +716,7 @@ describe('Agenda de citas', () => {
   });
 
   it('no agrega una cita creada fuera del filtro activo', async () => {
-    instalarFetch();
+    const fetchMock = instalarFetch();
 
     render(<Citas />);
 
@@ -650,13 +725,22 @@ describe('Agenda de citas', () => {
     });
     await screen.findByText('No hay citas para mostrar.');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Nueva cita' }));
+    const nuevaCita = screen.getByRole('button', { name: 'Nueva cita' });
+    await waitFor(() => expect(nuevaCita).toBeEnabled());
+    fireEvent.click(nuevaCita);
     completarFormulario();
     fireEvent.click(screen.getByRole('button', { name: 'Crear cita' }));
 
     await waitFor(() =>
-      expect(screen.getByText('No hay citas para mostrar.')).toBeInTheDocument(),
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/citas',
+        expect.objectContaining({ method: 'POST' }),
+      ),
     );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText('No hay citas para mostrar.')).toBeInTheDocument();
     expect(screen.queryByText(CLIENTE.nombre)).not.toBeInTheDocument();
   });
 
@@ -694,13 +778,15 @@ describe('Agenda de citas', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
-  it('anuncia la carga de la agenda', () => {
+  it('anuncia la carga y evita crear citas con una respuesta obsoleta', () => {
     instalarFetch({ retrasarAgenda: true });
 
     render(<Citas />);
 
     expect(screen.getByText('Cargando agenda…')).toBeInTheDocument();
-    expect(screen.getByText('Cargando clientes y empleados…')).toBeInTheDocument();
+    expect(screen.getByText('Cargando clientes…')).toBeInTheDocument();
+    expect(screen.getByText('Cargando empleados…')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nueva cita' })).toBeDisabled();
   });
 
   it('muestra el error de carga de la agenda', async () => {
@@ -712,6 +798,31 @@ describe('Agenda de citas', () => {
       await screen.findByText('No se pudo cargar la agenda'),
     ).toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.queryByText('No hay citas para mostrar.')).not.toBeInTheDocument();
+  });
+
+  it('muestra errores y estados de catálogos de forma independiente', async () => {
+    instalarFetch({
+      errorEmpleados: 'No se pudieron cargar los empleados',
+      retrasarClientes: true,
+    });
+
+    render(<Citas />);
+
+    expect(
+      await screen.findByText('No se pudieron cargar los empleados'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nueva cita' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Reintentar empleados' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Cargando clientes…')).toBeInTheDocument();
+    expect(
+      screen.queryByText('No se pudieron cargar los clientes'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Reintentar clientes' }),
+    ).not.toBeInTheDocument();
   });
 
   it('deshabilita la creación si falla un catálogo y ofrece reintento', async () => {
@@ -724,8 +835,38 @@ describe('Agenda de citas', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Nueva cita' })).toBeDisabled();
     expect(
-      screen.getByRole('button', { name: 'Reintentar catálogos' }),
+      screen.getByRole('button', { name: 'Reintentar clientes' }),
     ).toBeInTheDocument();
+  });
+
+  it('reintenta solo el catálogo fallido y recupera la agenda', async () => {
+    const fetchMock = instalarFetch({ fallarClientesPrimeraVez: true });
+
+    render(<Citas />);
+
+    const reintento = await screen.findByRole('button', {
+      name: 'Reintentar clientes',
+    });
+    expect(screen.getByRole('button', { name: 'Nueva cita' })).toBeDisabled();
+
+    fireEvent.click(reintento);
+
+    await waitFor(() => {
+      const llamadas = fetchMock.mock.calls.map(
+        (call) => call[0] as string,
+      );
+      expect(llamadas).toContain('/api/citas');
+      expect(llamadas.filter((url) => url === '/api/clientes')).toHaveLength(2);
+      expect(llamadas.filter((url) => url === '/api/empleados')).toHaveLength(1);
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByText('No se pudieron cargar los clientes'),
+      ).not.toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Nueva cita' })).toBeEnabled(),
+    );
   });
 
   it('gestiona foco, Escape y contención de Tab en el modal', async () => {
@@ -774,6 +915,10 @@ describe('Agenda de citas', () => {
     expect(
       within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancelar' }),
     ).toBeDisabled();
+
+    fireEvent.keyDown(document, { key: 'Tab' });
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(screen.getByRole('dialog')).toHaveFocus();
   });
 
   it('deshabilita los controles mientras se transiciona una cita', async () => {
@@ -798,5 +943,33 @@ describe('Agenda de citas', () => {
     );
     expect(screen.getByRole('button', { name: 'Nueva cita' })).toBeDisabled();
     expect(screen.getByLabelText('Fecha')).toBeDisabled();
+  });
+
+  it('deshabilita el reintento de catálogos durante una transición', async () => {
+    instalarFetch({
+      errorClientes: 'No se pudieron cargar los clientes',
+      retrasarTransicion: true,
+    });
+
+    render(<Citas />);
+
+    await screen.findByText(CLIENTE.nombre);
+    const fila = filaDe(CLIENTE.nombre);
+    fireEvent.click(
+      within(fila).getByRole('button', {
+        name: `Confirmar cita de ${CLIENTE.nombre}`,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        within(fila).getByRole('button', {
+          name: `Confirmar cita de ${CLIENTE.nombre}, en curso`,
+        }),
+      ).toBeDisabled(),
+    );
+    expect(
+      screen.getByRole('button', { name: 'Reintentar clientes' }),
+    ).toBeDisabled();
   });
 });
