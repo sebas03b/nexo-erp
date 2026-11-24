@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 
 import { Nomina } from './Nomina';
@@ -51,6 +51,9 @@ describe('Página de Nómina', () => {
     expect(
       await screen.findByRole('heading', { level: 3, name: 'Resumen' }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Calcular liquidación' }),
+    ).toBeInTheDocument();
   });
 
   it('calcula liquidación y muestra el resultado', async () => {
@@ -82,7 +85,6 @@ describe('Página de Nómina', () => {
       </BrowserRouter>,
     );
 
-    // Llenar formulario
     fireEvent.change(document.getElementById('empleadoId')!, {
       target: { value: 'emp-1' },
     });
@@ -93,11 +95,9 @@ describe('Página de Nómina', () => {
       target: { value: '1500000' },
     });
 
-    // Hacer clic en calcular
     fireEvent.click(screen.getByRole('button', { name: 'Calcular liquidación' }));
 
-    await waitFor(() =>
-      expect(screen.findByText('$ 1.542.000,00')).toBeInTheDocument(),
-    );
+    const resultado = await screen.findByText('$ 1.542.000,00');
+    expect(resultado).toBeInTheDocument();
   });
 });

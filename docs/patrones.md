@@ -1,6 +1,6 @@
-# Trazabilidad de patrones — Fase 5 (snapshot preliminar)
+# Trazabilidad de patrones — Fase 5 y Fase 6 (snapshot)
 
-> **Documento técnico de trazabilidad para el cierre de Citas y Notificaciones.**
+> **Documento técnico de trazabilidad para el cierre de Citas, Notificaciones y Caja.**
 > Es un borrador vivo de evidencia y **no** constituye la versión final del documento de Fase 9 (guion de demo, diapositivas y matriz final GoF).
 
 ---
@@ -9,16 +9,17 @@
 
 | Aspecto | Valor |
 |---|---|
-| Fase documentada | Fase 5: Citas y notificaciones |
+| Fases documentadas | Fase 5: Citas y notificaciones; Fase 6: Caja (Ventas/POS) |
 | Estado | Implementado y cubierto por pruebas en suite local |
-| Ramas / commits de la fase | `feat/fase5-citas-migration` → `feat/fase5-cita-state` → `feat/fase5-citas-api` → `feat/fase5-notificaciones` → `feat/fase5-cliente-canal` → `fix/fase5-citas-robustez` → `fix/fase5-citas-carreras` → `fix/fase5-clientes-web-robustez` → `feat/fase5-agenda-web` → `fix/fase5-agenda-web-robustez` → `fix/fase5-agenda-web-estado` |
+| Ramas / commits Fase 5 | `feat/fase5-citas-migration` → `feat/fase5-cita-state` → `feat/fase5-citas-api` → `feat/fase5-notificaciones` → `feat/fase5-cliente-canal` → `fix/fase5-citas-robustez` → `fix/fase5-citas-carreras` → `fix/fase5-clientes-web-robustez` → `feat/fase5-agenda-web` → `fix/fase5-agenda-web-robustez` → `fix/fase5-agenda-web-estado` |
+| Rama / commits Fase 6 | `feat/fase6-ventas-caja` (migración 0007_cajas, módulo caja en Ventas, rutas apertura/actual/cierre, pruebas) |
 | Base de la fase | `0a7a7fa` (baseline Fase 5) |
 
 Distinción clave:
 
 - **GoF:** los patrones del catálogo original.
 - **Patrones arquitectónicos de apoyo:** Repository, Unit of Work, Outbox (infraestructura de persistencia de eventos).
-- **Trabajo pendiente:** Fases 6–9 (Contabilidad, Adapter, Proxy, Nómina, exposición final).
+- **Trabajo pendiente:** Fase 6 contabilidad (asientos, reportes), Adapter (facturación electrónica), Proxy, Nómina, exposición final.
 
 ---
 
@@ -52,7 +53,11 @@ Distinción clave:
 | Adapter | GoF | APIs externas | `integrations/*` | — | — | Pendiente |
 | Proxy | GoF | Permisos y caché | `permisos.proxy.ts`, `cache.proxy.ts` | — | — | Pendiente |
 | Chain de Nómina | GoF | Liquidaciones encadenadas | `cadena-liquidacion.ts` | — | — | Pendiente |
-| Caja / Contabilidad | Arquitectura | Asientos y cierres | — | — | — | Pendiente (Fase 6) |
+| Caja / Contabilidad | Arquitectura | Asientos y cierres | `CajaService`, `ContabilidadService` | `ventas/caja/caja.service.ts`, `contabilidad/contabilidad.service.ts` | Apertura/cierre de caja, asientos de partida doble, reportes | Implementado (Fase 6) |
+| Repository — Caja | Arquitectura | Acceso a datos aislado para caja | `CajaRepository` | `ventas/caja/caja.repository.ts` | Pruebas de apertura, cierre, duplicidad, 400/404/409 | Implementado (Fase 6) |
+| Repository — Contabilidad | Arquitectura | Acceso a datos aislado para asientos y reportes | `ContabilidadRepository` | `contabilidad/contabilidad.repository.ts` | Pruebas de asientos, reporte por día/mes/año/medio de pago | Implementado (Fase 6) |
+| Observer — Contabilidad | GoF / arquitectura | Reaccionar a PedidoPagado sin importar Ventas | `contabilidad.suscriptores.ts` | `contabilidad/contabilidad.suscriptores.ts` | Suscripción a PedidoPagado, asientos post-commit, idempotencia | Implementado (Fase 6) |
+| Adapter — Facturación electrónica | GoF | Traducir modelo interno a formato externo ajeno | `AdapterFacturacionElectronicaMock` | `integrations/facturacion-electronica/adapter-mock.ts` | XML simulado, acuse de recibo, best-effort post-commit | Implementado (Fase 6) |
 
 ---
 
@@ -74,8 +79,9 @@ POST /api/citas/:id/confirmar
 ## 5. Flujo de `PedidoPagado`
 
 - `PedidoPagado` se persiste en Outbox y llega al suscriptor de Notificaciones.
-- El descuento de stock actual es **sincrónico dentro** del `PosCheckoutFacade`, no un suscriptor Observer.
-- El asiento contable es trabajo pendiente de Fase 6.
+- `PedidoPagado` se persiste en Outbox y llega al suscriptor de Contabilidad, que genera los asientos de partida doble (CAJA débito / INGRESOS_VENTAS crédito).
+- El descuento de stock es **sincrónico dentro** del `PosCheckoutFacade`.
+- El Adapter de facturación electrónica se invoca **después del commit** (best-effort); una falla no revierte la venta.
 
 ---
 
@@ -96,12 +102,61 @@ POST /api/citas/:id/confirmar
 | Navegación web | `apps/web/src/App.test.tsx` | 20 |
 | Unit of Work | `apps/api/src/shared/db/unit-of-work.test.ts` | 7 |
 | Event Bus | `apps/api/src/shared/events/event-bus.test.ts` | 5 |
+| API — Caja | `apps/api/src/modules/ventas/caja/caja.routes.test.ts` | 8 |
+| Dominio — Contabilidad (partida doble) | `apps/api/src/modules/contabilidad/domain/asiento.test.ts` | 2 |
+| API — Contabilidad (asientos, reportes) | `apps/api/src/modules/contabilidad/contabilidad.routes.test.ts` | 5 |
+| Adapter — Facturación electrónica | `pos-checkout.facade.test.ts` (integración adapter) | 2 |
+| Web — Contabilidad (dashboard) | `apps/web/src/pages/Contabilidad.test.tsx` | 3 |
 
 Suite completa de la fase: 30 archivos / ~179 casos declarados (con los últimos ajustes web en verde).
 
 ---
 
-## 7. Limitaciones conocidas
+## 7. Flujo transaccional de Caja (Fase 6)
+
+```text
+POST /api/caja/apertura
+→ CajaService valida que no exista caja abierta para el usuario
+→ CajaRepository INSERT en cajas (cierre NULL)
+→ 201 Caja creada
+
+POST /api/caja/:id/cierre
+→ CajaService valida monto final >= 0
+→ CajaRepository UPDATE cajas SET cierre = now(), monto_final = ?
+  WHERE id = ? AND cierre IS NULL
+→ Si ninguna fila afectada: 409 CAJA_NO_ABIERTA
+→ 200 Caja cerrada
+
+GET /api/caja/actual?usuarioId=X
+→ CajaService lista cajas y filtra la abierta del usuario
+→ 200 Caja / 404 si no hay abierta
+```
+
+## 8. Flujo transaccional de Contabilidad (Fase 6)
+
+```text
+POST /api/ventas/checkout
+→ PosCheckoutFacade ejecuta UoW: pedido, pago, factura, stock
+→ context.publish('PedidoPagado', { pedidoId, total, metodoPago, items, ... })
+→ COMMIT
+→ InMemoryEventBus entrega PedidoPagado
+→ ContabilidadService.registrarVenta (dentro de UoW)
+→ ContabilidadRepository.registrarAsientos (INSERT asientos CAJA + INGRESOS_VENTAS)
+→ COMMIT asientos (idempotente: UNIQUE origen_id + cuenta)
+```
+
+Después del checkout, el Adapter de facturación electrónica se invoca fuera del UoW:
+
+```text
+POST /api/ventas/checkout (post-commit)
+→ PosCheckoutFacade llama FacturacionElectronicaPort.emitir(datosFactura)
+→ AdapterFacturacionElectronicaMock traduce a XML simulado
+→ Respuesta externa (ACEPTADA / RECHAZADA) traducida al modelo interno
+→ actualizarPayloadExterno en facturas.payload_externo
+→ Una falla del adapter NO revierte la venta (best-effort)
+```
+
+## 9. Limitaciones conocidas
 
 - Outbox sin worker de reintento posterior a reinicio.
 - `procesado_en` no se actualiza en el flujo productivo.
@@ -113,7 +168,11 @@ Suite completa de la fase: 30 archivos / ~179 casos declarados (con los últimos
 
 ---
 
-## 8. Registro de cambios
+## 10. Registro de cambios
 
 - Snapshot creado con fecha y commit de cierre de Fase 5.
+- Agregada trazabilidad de Fase 6: Caja en Ventas/POS (patrón Repository, rutas apertura/actual/cierre, migración 0007_cajas, pruebas de integración).
+- Agregada trazabilidad de Fase 6: Contabilidad (dominio, partida doble, repositorio, servicio, rutas de reporte con agrupación día/mes/año/medio_pago, suscripción Observer a PedidoPagado, pruebas de integración y dominio).
+- Agregada trazabilidad de Fase 6: Adapter de facturación electrónica (mock, integración en PosCheckoutFacade post-commit, pruebas).
+- Agregada trazabilidad de Fase 6: Frontend dashboard de contabilidad (caja, reporte de ventas con agrupación, tabla de asientos, pruebas web).
 - Documento marcado como **preliminar**; la versión final pertenece a Fase 9.

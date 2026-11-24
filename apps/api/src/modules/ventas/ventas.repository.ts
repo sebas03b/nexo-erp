@@ -396,4 +396,23 @@ export class VentasRepository {
 
     return row ? mapFactura(row) : undefined;
   }
+
+  async actualizarPayloadExterno(
+    executor: Executor,
+    facturaId: string,
+    payload: object | string | null,
+  ): Promise<void> {
+    await executor
+      .updateTable('facturas')
+      .set({
+        payload_externo:
+          payload === null
+            ? null
+            : typeof payload === 'string'
+              ? payload
+              : JSON.stringify(payload),
+      })
+      .where('id', '=', facturaId)
+      .execute();
+  }
 }

@@ -332,7 +332,7 @@ Una sola venta recorre casi todos los patrones:
 - [ ] Fase 3: Precios, impuestos y pagos (Strategy)
 - [ ] Fase 4: Checkout POS (Facade, Command, Chain, Builder)
 - [x] Fase 5: Citas y notificaciones (State, Factory Method)
-- [ ] Fase 6: Contabilidad e integración externa (Adapter)
+- [x] Fase 6: Contabilidad e integración externa (Adapter)
 - [ ] Fase 7: Nómina (Chain)
 - [ ] Fase 8: Seguridad y caché (Proxy)
 - [ ] Fase 9: Preparación de la exposición
@@ -341,4 +341,4 @@ Una sola venta recorre casi todos los patrones:
 
 ## 11. Siguiente paso
 
-Continuar con la Fase 6: Contabilidad e integración externa. La deuda P0 detectada en el checkout de la Fase 4 se conserva separada y requiere su propia revisión y aprobación antes de mezclarse con Contabilidad.
+Continuar con la Fase 7: Nómina. La deuda P0 detectada en el checkout de la Fase 4 se conserva separada y requiere su propia revisión y aprobación antes de mezclarse con Nómina.

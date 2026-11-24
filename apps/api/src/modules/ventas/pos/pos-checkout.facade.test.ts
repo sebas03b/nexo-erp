@@ -9,6 +9,7 @@ import type { CadenaValidacion } from '../domain/validation/cadena-validacion.js
 import type { CarritoRepository } from './carrito.repository.js';
 import type { VentasRepository } from '../ventas.repository.js';
 import type { EstrategiasVentas } from '../ventas.service.js';
+import type { FacturacionElectronicaPort } from '../../../integrations/facturacion-electronica/facturacion-electronica.port.js';
 import { PosCheckoutFacade } from './pos-checkout.facade.js';
 
 const CARRITO_ID = '11111111-1111-4111-8111-111111111111';
@@ -160,6 +161,10 @@ const cadenaValidacion = {
 
 const verificarStock = (): Promise<boolean> => Promise.resolve(true);
 
+const facturacionMock: FacturacionElectronicaPort = {
+  emitir: () => Promise.resolve({ estado: 'ACEPTADA', cufe: 'CUFE-TEST', payloadXml: '<xml/>' }),
+};
+
 describe('Patrón Facade - checkout POS', () => {
   it('debe ejecutar todo el flujo de venta dentro de una transacción', async () => {
     const eventos: Array<{ tipo: string; payload: unknown }> = [];
@@ -177,6 +182,7 @@ describe('Patrón Facade - checkout POS', () => {
       repo,
       crearUnitOfWork(eventos, db),
       verificarStock,
+      facturacionMock,
     );
 
     const resultado = await facade.checkout({
@@ -210,6 +216,7 @@ describe('Patrón Facade - checkout POS', () => {
       repo,
       crearUnitOfWork(eventos, db),
       verificarStock,
+      facturacionMock,
     );
 
     await expect(

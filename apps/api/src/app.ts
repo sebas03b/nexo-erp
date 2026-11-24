@@ -34,7 +34,19 @@ import { ValidarStockSuficiente } from './modules/ventas/domain/validation/caden
 import { CarritoRepository } from './modules/ventas/pos/carrito.repository.js';
 import { carritoRoutes } from './modules/ventas/pos/carrito.routes.js';
 import { CarritoService } from './modules/ventas/pos/carrito.service.js';
+import { CajaRepository } from './modules/ventas/caja/caja.repository.js';
+import { cajaRoutes } from './modules/ventas/caja/caja.routes.js';
+import { CajaService } from './modules/ventas/caja/caja.service.js';
+import { ContabilidadRepository } from './modules/contabilidad/contabilidad.repository.js';
+import { contabilidadRoutes } from './modules/contabilidad/contabilidad.routes.js';
+import { ContabilidadService } from './modules/contabilidad/contabilidad.service.js';
+import { registrarSuscripcionesContabilidad } from './modules/contabilidad/contabilidad.suscriptores.js';
+import { NominaRepository } from './modules/nomina/nomina.repository.js';
+import { nominaRoutes } from './modules/nomina/nomina.routes.js';
+import { NominaService } from './modules/nomina/nomina.service.js';
+import { CadenaLiquidacion } from './modules/nomina/cadena-liquidacion.js';
 import { PosCheckoutFacade } from './modules/ventas/pos/pos-checkout.facade.js';
+import { AdapterFacturacionElectronicaMock } from './integrations/facturacion-electronica/adapter-mock.js';
 import { VentasRepository } from './modules/ventas/ventas.repository.js';
 import { ventasRoutes } from './modules/ventas/ventas.routes.js';
 import type { EstrategiasVentas } from './modules/ventas/ventas.service.js';
@@ -213,6 +225,24 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     estrategiasVentas,
   );
 
+  const cajaRepository = new CajaRepository(db);
+  const cajaService = new CajaService(cajaRepository);
+
+  const contabilidadRepository = new ContabilidadRepository(db);
+  const contabilidadService = new ContabilidadService(
+    contabilidadRepository,
+    unitOfWork,
+  );
+
+  registrarSuscripcionesContabilidad(eventBus, contabilidadService);
+
+  const nominaRepository = new NominaRepository(db);
+  const nominaService = new NominaService(
+    nominaRepository,
+    new CadenaLiquidacion(),
+    unitOfWork,
+  );
+
   const posCheckoutFacade = new PosCheckoutFacade(
     cadenaValidacion,
     estrategiasVentas,
@@ -224,6 +254,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       const stock = await inventarioRepository.obtenerStock(productoId);
       return stock !== undefined && stock.cantidad >= cantidad;
     },
+    new AdapterFacturacionElectronicaMock(),
   );
 
   await app.register(inventarioRoutes, { repository: inventarioRepository });
@@ -231,6 +262,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(empleadosRoutes, { service: empleadosService });
   await app.register(citasRoutes, { service: citasService });
   await app.register(carritoRoutes, { service: carritoService });
+  await app.register(cajaRoutes, { service: cajaService });
+  await app.register(contabilidadRoutes, { service: contabilidadService });
+  await app.register(nominaRoutes, { service: nominaService });
   await app.register(ventasRoutes, {
     repository: ventasRepository,
     unitOfWork,

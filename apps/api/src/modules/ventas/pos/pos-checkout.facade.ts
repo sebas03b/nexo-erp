@@ -5,6 +5,8 @@ import { randomUUID } from 'node:crypto';
 import type { UnitOfWork } from '../../../shared/db/unit-of-work.js';
 import { DomainError, RecursoNoEncontrado } from '../../../shared/errors/domain-error.js';
 import type { AppEventMap } from '../../../shared/events/event-map.js';
+import type { DatosFacturaInterna } from '../../../integrations/facturacion-electronica/facturacion-electronica.port.js';
+import type { FacturacionElectronicaPort } from '../../../integrations/facturacion-electronica/facturacion-electronica.port.js';
 import { FacturaBuilder } from '../domain/factura.builder.js';
 import type { Factura } from '../domain/factura.js';
 import { Pedido, type PedidoItem } from '../domain/pedido.js';
@@ -40,6 +42,7 @@ export class PosCheckoutFacade {
       productoId: string,
       cantidad: number,
     ) => Promise<boolean>,
+    private readonly facturacion: FacturacionElectronicaPort,
   ) {}
 
   async checkout(input: CheckoutInput): Promise<CheckoutResultado> {
@@ -76,7 +79,7 @@ export class PosCheckoutFacade {
       verificarStock: this.verificarStock,
     });
 
-    return this.unitOfWork.execute(async (context) => {
+    const resultado = await this.unitOfWork.execute(async (context) => {
       const carritoTx = await this.carritoRepository.obtenerCarrito(
         context.db,
         input.carritoId,
@@ -241,5 +244,28 @@ export class PosCheckoutFacade {
 
       return { pedido, factura, pago };
     });
+
+    // Emisión de factura electrónica: best-effort DESPUÉS del commit.
+    // Una falla del adapter NO revierte la venta.
+    try {
+      const { factura, pedido } = resultado;
+      const datos: DatosFacturaInterna = {
+        facturaId: factura.id,
+        numero: factura.numero,
+        pedidoId: pedido.id,
+        total: pedido.total,
+        fecha: new Date().toISOString(),
+      };
+      const resultadoEmision = await this.facturacion.emitir(datos);
+      await this.repository.actualizarPayloadExterno(
+        this.unitOfWork.db,
+        factura.id,
+        resultadoEmision.payloadXml,
+      );
+    } catch {
+      // Fallo de facturación electrónica: la venta ya se confirmó, no se revierte.
+    }
+
+    return resultado;
   }
 }

@@ -12,6 +12,14 @@ export type AppEventMap = {
     pagadoEn: string;
     metodoPago: string;
     referenciaPago: string;
+    items?: Array<{
+      productoId: string;
+      nombre: string;
+      tipo: 'producto' | 'servicio';
+      cantidad: number;
+      precioUnitario: number;
+      subtotal: number;
+    }>;
   };
   CitaConfirmada: {
     citaId: string;
