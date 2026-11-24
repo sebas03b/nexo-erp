@@ -1,10 +1,10 @@
-import { useCallback, useState, type JSX } from 'react';
+import { useCallback, useEffect, useState, type JSX } from 'react';
 import { Link } from 'react-router-dom';
 import { BiCalculator, BiListUl, BiWallet } from 'react-icons/bi';
 
 import { obtenerJson, enviarJson } from '../lib/api';
 import { formatearMoneda } from '../lib/formato';
-import type { ConceptoNomina, LiquidacionResultado } from '../types';
+import type { ConceptoNomina, Empleado, LiquidacionResultado } from '../types';
 
 export function Nomina(): JSX.Element {
   const [empleadoId, setEmpleadoId] = useState('');
@@ -15,8 +15,24 @@ export function Nomina(): JSX.Element {
 
   const [conceptos, ] = useState<ConceptoNomina[]>([]);
   const [liquidaciones, setLiquidaciones] = useState<LiquidacionResultado[]>([]);
+  const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const cargarEmpleados = useCallback(async () => {
+    try {
+      const data = await obtenerJson<Empleado[]>('/api/empleados');
+      setEmpleados(data);
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : 'No se pudieron cargar los empleados',
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    void cargarEmpleados();
+  }, [cargarEmpleados]);
 
   const calcularLiquidacion = useCallback(
     async (
@@ -159,14 +175,19 @@ export function Nomina(): JSX.Element {
         </h3>
         <div className="form-grid">
           <div className="campo-formulario">
-            <label htmlFor="empleadoId">Empleado ID</label>
-            <input
+            <label htmlFor="empleadoId">Empleado</label>
+            <select
               id="empleadoId"
-              type="text"
               value={empleadoId}
               onChange={(e) => setEmpleadoId(e.target.value)}
-              placeholder="UUID del empleado"
-            />
+            >
+              <option value="">Seleccionar empleado</option>
+              {empleados.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.nombre}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="campo-formulario">
             <label htmlFor="periodo">Período</label>

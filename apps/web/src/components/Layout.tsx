@@ -1,6 +1,6 @@
 import type { JSX, ReactNode } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { BiCalculator, BiCartAlt, BiBox, BiGroup, BiCalendar, BiWallet, BiIdCard, BiLogOut } from 'react-icons/bi';
+import { BiCalculator, BiCartAlt, BiBox, BiGroup, BiCalendar, BiWallet, BiIdCard, BiLogOut, BiUserPlus } from 'react-icons/bi';
 import { useAuth } from '../hooks/useAuth';
 import logoSidebar from '../assets/logonexo1.png';
 
@@ -52,6 +52,13 @@ const enlaces: EnlaceSidebar[] = [
     rol: 'admin',
   },
   {
+    id: 'usuarios',
+    to: '/usuarios',
+    etiqueta: 'Gestión de Usuarios',
+    icono: <BiUserPlus size={20} className="mr-2" />,
+    rol: 'admin',
+  },
+  {
     id: 'personal',
     to: '#',
     etiqueta: 'Gestión de personal',
@@ -74,9 +81,9 @@ export function Layout(): JSX.Element {
 
   return (
     <div className="app-layout">
-      <aside className="app-layout">
+      <aside className="sidebar">
         <header className="sidebar-header">
-          <NavLink to="/ventas" className="sidebar-logo-contenedor">
+          <NavLink to="/ventas" className="sidebar-logo-contenedor" onClick={(e) => { e.preventDefault(); navigate('/ventas'); }}>
             <img src={logoSidebar} alt="Nexo-ERP" className="sidebar-logo" />
           </NavLink>
           {usuario && (
@@ -93,6 +100,13 @@ export function Layout(): JSX.Element {
             <NavLink
               key={enlace.id}
               to={enlace.to}
+              onClick={(e) => {
+                if (enlace.to === '#') {
+                  e.preventDefault();
+                } else {
+                  navigate(enlace.to);
+                }
+              }}
               className={({ isActive }) => {
                 const esFicticio = enlace.to === '#';
                 const estaActivo = !esFicticio && isActive;

@@ -83,4 +83,8 @@ export class AuthService {
   async logout(token: string): Promise<void> {
     await this.#repository.invalidarSesion(token);
   }
+
+  async listarUsuarios(rol?: string): Promise<Usuario[]> {
+    return this.#repository.listarUsuarios(rol);
+  }
 }

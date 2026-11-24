@@ -7,21 +7,21 @@
 | Aspecto | Valor |
 |---|---|
 | Fecha de corte | 2026-11-24 |
-| Rama | `feat/fase7-nomina-api` |
-| Commit base | `fa986b5b3964b0dfd778c102f0b9c415d3037746` |
-| Relación con `main` | `main` permanece en `59439c2`; la rama está 7 commits por delante, por lo que las fases 6 y 7 todavía no están integradas en `main` |
-| Objeto observado | Commit `fa986b5`; el árbol solo contenía al final los cambios documentales de `README.md` y este archivo, sin cambios de aplicación |
-| GitNexus | Índice del commit `fa986b5`: 3.314 nodos, 7.123 relaciones, 104 clústeres y 177 flujos |
+| Rama | `feat/fase8-seguridad-cache` |
+| Commit base | `05cbde1e03609d131093aa8dd7caec6d5654452f` |
+| Relación con `main` | `main` permanece en `59439c2`; la rama está 11 commits por delante, por lo que las fases 6, 7 y 8 todavía no están integradas en `main` |
+| Objeto observado | Commit `05cbde1`, validado en un worktree aislado. El árbol del commit estaba limpio; los cambios abiertos de `docs/plan.md` y `docs/patrones.md` pertenecen al trabajo concurrente y no forman parte de este corte |
+| GitNexus | **No reindexado en este corte.** El índice consultable sigue siendo el de `fa986b5` y no describe autenticación ni los Proxy de Fase 8 |
 | Alcance | Backend Fastify, frontend React, persistencia Kysely/PostgreSQL, pruebas Vitest |
 
-> **Corte reproducible.** El código y las pruebas se verificaron sobre `fa986b5`. La suite y el lint no están verdes: el detalle reproducible está en [Verificación y evidencia](#13-verificación-y-evidencia). Este documento no presenta la fase 7 como cerrada mientras persistan esos fallos.
+> **Corte reproducible.** El código y las pruebas se verificaron sobre `05cbde1` en un worktree aislado. La suite y el lint no están verdes: 21 pruebas fallan y ESLint registra 30 errores. El detalle está en [Verificación y evidencia](#13-verificación-y-evidencia). Este documento no presenta la Fase 8 como cerrada mientras persistan esos fallos y los Proxy sigan sin cablearse.
 
 ### Fuentes y jerarquía de verdad
 
-1. **Código y pruebas del commit base `fa986b5`**: describen lo que realmente se ejecuta.
+1. **Código y pruebas del commit base `05cbde1`**: describen lo que realmente se ejecuta en este corte.
 2. **Especificaciones vigentes** en `docs/`: describen el comportamiento requerido.
 3. **`docs/plan.md`**: contiene fases y prioridades, pero su checklist no siempre coincide con el código.
-4. **`docs/patrones.md`**: es un snapshot de trazabilidad de las fases 5 y 6; puede contener afirmaciones históricas superadas.
+4. **`docs/patrones.md`**: es un snapshot de trazabilidad de las fases 5 y 6; puede contener afirmaciones históricas superadas. No se modifica desde este informe.
 
 Cuando una especificación y el código difieren, este documento los muestra como dos estados separados en lugar de declarar “terminado” por intuición.
 
@@ -60,9 +60,11 @@ El resultado consolidado es:
 - `PedidoPagado` desacopla Notificaciones y Contabilidad de Ventas.
 - La cadena de Nómina está implementada y probada como unidad, pero **no está conectada en `app.ts`**; la API productiva calcula una liquidación con cero conceptos.
 - La página web `/nomina` existe, pero dispara cálculo y listado en paralelo; la respuesta del listado puede sobrescribir el resultado calculado y su prueba falla de forma reproducible.
-- El patrón Proxy, la autenticación/roles y la caché siguen pendientes.
+- La autenticación JWT, el login web, los roles y la protección de Caja/Contabilidad existen desde la Fase 8, pero solo cubren esas dos superficies.
+- `PermisosProxy` y `CacheProxy` existen con pruebas unitarias, pero están aislados: no se aplican desde `app.ts` ni desde las rutas.
 - La interfaz de Contabilidad existe, pero el cierre de caja web no puede obtener el ID de la caja abierta en el flujo actual.
 - El desglose de productos/servicios de Contabilidad devuelve una lista vacía porque el checkout no envía `items` en `PedidoPagado`.
+- La protección de rutas web deja en login 20 pruebas previas de `App.test.tsx`; la Fase 8 añadió regresiones de integración y lint.
 
 ### Estado por fases
 
@@ -76,7 +78,7 @@ El resultado consolidado es:
 | 5. Citas y Notificaciones | `Implementado` | State de cita, agenda, concurrencia y notificaciones simuladas por canal. |
 | 6. Contabilidad e integración | `Implementado parcialmente` | Asientos, idempotencia, reportes y Adapter existen; falta el desglose real de productos, los filtros web de fecha no son compatibles y hay defectos de cierre de caja y persistencia externa. |
 | 7. Nómina | `Implementado parcialmente` | Dominio, cadena, repositorio, servicio, rutas, migración, tipos, hook, página web y pruebas existen; falta conectar la cadena en el composition root, persistir detalle, exponer el catálogo y corregir la carrera del frontend. |
-| 8. Seguridad y caché | `Pendiente` | No hay Proxy de permisos ni Proxy de caché; la tabla `usuarios` no activa autenticación. |
+| 8. Seguridad y caché | `Implementado parcialmente` | Hay login JWT, sesiones, seed de usuarios, guard de rutas web y protección de Caja/Contabilidad. Los Proxy de permisos y caché existen y tienen pruebas, pero no están cableados; el bypass `x-user-id`, el secreto fijo y las regresiones web impiden cerrar la fase. |
 | 9. Exposición | `Implementado parcialmente` | Seed y evidencia viva existen; faltan demoEnsayada, validación contra PostgreSQL Docker y material final de exposición. |
 
 ---
@@ -102,7 +104,7 @@ El resultado consolidado es:
 └──────────────────────────────┬──────────────────────────────────┘
                                │ Kysely / pg
 ┌──────────────────────────────▼──────────────────────────────────┐
-│ PostgreSQL 17 — 17 tablas de dominio e infraestructura          │
+│ PostgreSQL 17 — 18 tablas de dominio e infraestructura          │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -118,7 +120,11 @@ El resultado consolidado es:
 - Strategies predeterminadas de descuento, impuesto y pago;
 - `PosCheckoutFacade` con `AdapterFacturacionElectronicaMock`;
 - suscripciones de Notificaciones y Contabilidad;
+- `AuthRepository`, `AuthService` y las rutas de autenticación;
+- dos hooks inline que protegen Caja y Contabilidad mediante JWT o `x-user-id`;
 - rutas de Inventario, Clientes, Empleados, Citas, Carrito, Caja, Contabilidad, Nómina y Ventas.
+
+`PermisosProxy` y `CacheProxy` no se instancian en este composition root. `shared/auth/middleware.ts` tampoco se registra; su lógica está duplicada en los hooks de Caja y Contabilidad.
 
 La verificación de la regla de aislamiento de módulos no encontró imports de producción entre dominios de `apps/api/src/modules/`, ni imports desde `integrations/` hacia `modules/`. La única coincidencia de cruce es la prueba de integración `modules/fase2.routes.test.ts`, que importa clases del dominio de Ventas para construir la aplicación. Los módulos productivos dependen de contratos compartidos, no de repositorios de otros módulos.
 
@@ -150,7 +156,7 @@ Los errores 500 se registran en el log de Fastify; los errores de negocio no se 
 | Contabilidad | Asientos por evento, idempotencia y reportes | Sí | `/contabilidad` | `asientos` |
 | Nómina | Conceptos, liquidación, listado y consulta | Sí, parcial | `/nomina`, parcial | `conceptos_nomina`, `liquidaciones` |
 | Integración electrónica | Traducción interna/XML y respuesta simulada | Indirecta | No | `facturas.payload_externo` |
-| Seguridad | Usuarios y roles previstos | No funcional | No | `usuarios` |
+| Seguridad | Login JWT, registro, sesiones y roles | Parcial: login/registro; Caja y Contabilidad protegidas | `/login`, guard de rutas | `usuarios`, `sesiones` |
 
 ### 3.1 Inventario
 
@@ -202,11 +208,13 @@ Los errores 500 se registran en el log de Fastify; los errores de negocio no se 
 
 ## 4. API REST actual
 
-Las rutas se registran desde `app.ts`; los contratos de entrada se validan con Zod. El código expone 47 endpoints REST contando `GET /health`.
+Las rutas se registran desde `app.ts`; los contratos de entrada se validan con Zod. El código expone 49 endpoints REST contando `GET /health` y las dos rutas de autenticación. Solo Caja y Contabilidad exigen autenticación en la API; las demás rutas siguen abiertas.
 
 | Módulo | Método y ruta | Uso |
 |---|---|---|
 | Salud | `GET /health` | Estado del servicio. |
+| Seguridad | `POST /api/auth/login` | Autenticar y devolver token JWT. |
+| Seguridad | `POST /api/auth/registro` | Crear usuario con rol `admin`, `cajero` o `contador`. |
 | Inventario | `GET /api/productos` | Listar productos. |
 | Inventario | `GET /api/productos/:id` | Consultar producto. |
 | Inventario | `POST /api/productos` | Crear producto. |
@@ -262,7 +270,8 @@ La especificación de Nómina contempla `GET /api/nomina/conceptos`, pero esa ru
 
 | Ruta web | Vista | Estado |
 |---|---|---|
-| `/ventas` | `ListadoVentas` | Implementada. |
+| `/login` | `Login` | Implementada; guarda token y usuario en `localStorage`. |
+| `/ventas` | `ListadoVentas` | Implementada; protegida por `RequireAuth`. |
 | `/ventas/nueva` | `NuevaVenta` | Implementada; usa carrito, comandos, stock y checkout. |
 | `/productos` | `Productos` | Implementada. |
 | `/clientes` | `Clientes` | Implementada, incluida edición de canal. |
@@ -270,7 +279,7 @@ La especificación de Nómina contempla `GET /api/nomina/conceptos`, pero esa ru
 | `/contabilidad` | `Contabilidad` | Implementada parcialmente; el cierre web no recibe el ID de caja. |
 | `/nomina` | `Nomina` | Implementada parcialmente; calcula y lista, pero el listado concurrente puede sobrescribir el resultado calculado y su prueba falla. |
 
-La web consume rutas relativas `/api/*`; Vite las redirige a `http://localhost:3000` durante desarrollo. `apps/web/src/lib/api.ts` convierte las respuestas de error de la API en `ApiError` con código y mensaje.
+La web consume rutas relativas `/api/*`; Vite las redirige a `http://localhost:3000` durante desarrollo. `apps/web/src/lib/api.ts` convierte las respuestas de error de la API en `ApiError` con código y mensaje. Toda la aplicación salvo `/login` está bajo `RequireAuth`, pero el rol solo filtra enlaces del sidebar (`Contabilidad` para contador, `Nómina` para admin); no existe un guard de autorización por ruta. Ninguna página envía el token JWT en sus llamadas `fetch`, por lo que Caja y Contabilidad seguirían dependiendo de `x-user-id` o de un cliente que añada la cabecera.
 
 ### Defecto visible en el cierre de caja web
 
@@ -301,15 +310,17 @@ Los `<input type="date">` de `Contabilidad.tsx` producen valores `YYYY-MM-DD`. `
 | `0007_cajas` | `cajas` y caja abierta única por usuario. |
 | `0008_contabilidad` | `asientos`, idempotencia por origen/cuenta e índice por fecha. |
 | `0009_nomina` | `empleados.salario_base`, `conceptos_nomina`, `liquidaciones` e índices. |
+| `0010_seguridad_auth` | Convierte `cajas.usuario_id` a `uuid` con FK a `usuarios`; crea `sesiones` e índices por usuario y token. |
 
 Las migraciones se ejecutan con Kysely y un provider propio que lee pares `.up.sql`/`.down.sql` desde `db/migrations/`. El provider falla si una migración `up` no tiene su correspondiente `down`.
 
 ### 6.2 Tablas
 
-El esquema tipado de `apps/api/src/shared/db/schema.ts` registra 17 tablas:
+El esquema tipado de `apps/api/src/shared/db/schema.ts` registra 18 tablas:
 
 ```text
 usuarios
+sesiones
 clientes
 outbox_events
 productos
@@ -339,7 +350,7 @@ liquidaciones
 
 ### 6.4 Seed de demostración
 
-`apps/api/src/db/seed.ts` limpia 16 tablas operativas, conserva `usuarios` e inserta 3 clientes, 3 empleados, 5 conceptos de Nómina, 8 productos, 4 registros de stock y 2 citas. Solo los cuatro productos físicos reciben existencias; los cuatro servicios quedan sin fila de stock. No existe una prueba automatizada que certifique limpieza, repetibilidad, conteos e integridad referencial del seed.
+`apps/api/src/db/seed.ts` limpia las tablas operativas e inserta 3 usuarios (`admin`, `cajero1`, `contador1`), 3 clientes, 3 empleados, 5 conceptos de Nómina, 8 productos, 4 registros de stock y 2 citas. Solo los cuatro productos físicos reciben existencias; los cuatro servicios quedan sin fila de stock. No existe una prueba automatizada que certifique limpieza, repetibilidad, conteos e integridad referencial del seed.
 
 ---
 
@@ -358,7 +369,7 @@ liquidaciones
 | State | GoF | `modules/citas/domain/states/` y `modules/ventas/domain/states/` | Context `Cita`/`Pedido`, estado abstracto y estados concretos | `cita-estado.test.ts`, `pedido-estado.test.ts`, pruebas API | `Implementado` |
 | Factory Method | GoF adoptado por el proyecto | `modules/notificaciones/notificacion.factory.ts` | `NotificacionFactory`, `Notificador`, tres senders | `notificacion.factory.test.ts`, `notificaciones.service.test.ts` | `Implementado` |
 | Adapter | GoF | `integrations/facturacion-electronica/` | `FacturacionElectronicaPort`, `AdapterFacturacionElectronicaMock`, Facade | Integración en `pos-checkout.facade.test.ts`; falta prueba directa | `Implementado parcialmente` |
-| Proxy | GoF | — | — | — | `Pendiente` |
+| Proxy | GoF | `modules/auth/permisos.proxy.ts` y `modules/inventario/cache.proxy.ts` | `crearPermisosProxy`, tabla de permisos por rol, `DomainError 403`; `crearCacheProxy`, `Map` con TTL | `permisos.proxy.test.ts`, `cache.proxy.test.ts`; sin prueba de integración con rutas | `Implementado parcialmente` |
 | Repository | `No GoF` | `*/repository.ts` | Repositorios de Inventario, Clientes, Empleados, Citas, Ventas, Carrito, Caja, Contabilidad y Nómina | Pruebas de API/integración y repositorios compartidos | `Implementado parcialmente` |
 | Unit of Work | `No GoF` | `shared/db/unit-of-work.ts` | `UnitOfWork`, `UnitOfWorkContext`, Outbox, EventPublisher | `unit-of-work.test.ts` | `Implementado` |
 | Outbox | `No GoF` | `shared/events/outbox.ts` | `Outbox`, tabla `outbox_events` | Pruebas del Unit of Work; falta worker productivo | `Implementado parcialmente` |
@@ -520,14 +531,17 @@ La validación de stock tampoco distingue `producto` de `servicio`: exige una fi
 
 **Límites:** la Facade entrega `payloadXml` directamente a `VentasRepository.actualizarPayloadExterno`; ese método deja las cadenas sin serializar. Como `facturas.payload_externo` es `jsonb` y el XML no es JSON válido, el `UPDATE` es incompatible con el esquema. Además, la Facade descarta `estado` y `cufe`, no bifurca ante `RECHAZADA` y usa un `catch {}` vacío que oculta tanto el rechazo lógico como el error de persistencia. No hay reintento ni auditoría del fallo.
 
-### 7.11 Proxy — pendiente
+### 7.11 Proxy — permisos y caché
 
-No existe `permisos.proxy.ts` ni `cache.proxy.ts`. Tampoco hay middleware de autenticación, roles o caché. `usuarios.rol` existe en el esquema, pero no gobierna las rutas.
+**Ubicación:** `apps/api/src/modules/auth/permisos.proxy.ts` y `apps/api/src/modules/inventario/cache.proxy.ts`.
 
-La implementación prevista por `docs/plan.md` sigue siendo:
+**Participantes:** `crearPermisosProxy<T>`, la tabla `PERMISOS_POR_ROL`, el mapa `METODO_A_PERMISO` y `DomainError` con `statusCode: 403`; `crearCacheProxy<T>`, una `Map` de entradas con expiración y la clave `metodo:JSON(args)`.
 
-- `PermisosProxy`: interceptar operaciones sensibles y devolver 403 a un cajero sin permiso.
-- `CacheProxy`: cachear lecturas frecuentes, por ejemplo el catálogo.
+**Funcionamiento:** ambos usan `new Proxy(target, { get })`. El Proxy de permisos envuelve los métodos en una función asíncrona, resuelve el permiso por nombre de método y lanza `SIN_PERMISOS` antes de invocar el servicio real. El Proxy de caché devuelve una entrada vigente o ejecuta el método, guarda el resultado y lo reutiliza hasta que vence el TTL.
+
+**Evidencia:** `permisos.proxy.test.ts` cubre admin, cajero y contador, incluidos los rechazos 403. `cache.proxy.test.ts` cubre reutilización, claves distintas, listas y expiración por TTL. Ambas pruebas pasan dentro de la suite, pero no prueban una ruta HTTP.
+
+**Límites:** ninguno de los dos Proxy está cableado en `app.ts`, en `caja.routes.ts`, en `contabilidad.routes.ts` ni en las rutas de inventario. Por tanto, el criterio de aceptación del plan —un cajero que intenta anular una venta recibe 403— no se cumple; además, `METODO_A_PERMISO` no contiene una operación de anulación de venta. La caché no participa de la lectura real del catálogo, no tiene invalidación al escribir y su clave basada en `JSON.stringify` no cubre argumentos no serializables. Los permisos de Caja/Contabilidad se aplican hoy mediante hooks inline y el rol se deriva del JWT o de `x-user-id`; el `authPlugin` compartido no está conectado.
 
 ### 7.12 Repository — no GoF
 
@@ -692,6 +706,25 @@ Usuario web → /nomina → "Calcular liquidación"
 
 La prueba `Nomina.test.tsx` deja expuesta esta carrera: el POST mockeado devuelve una liquidación y el GET mockeado devuelve `[]`; el resultado esperado no aparece.
 
+### 8.6 Login y acceso a Caja/Contabilidad
+
+```text
+Navegador → /login
+→ POST /api/auth/login
+→ AuthService valida scrypt y firma JWT
+→ AuthRepository registra sesión
+→ web guarda token y usuario en localStorage
+→ RequireAuth permite renderizar las rutas internas
+
+API → ruta de Caja o Contabilidad
+→ hook inline de app.ts
+→ si existe x-user-id: asigna cajero o contador y omite JWT
+→ si no, exige Bearer y verifica firma/expiración
+→ request.usuario gobierna la ruta
+```
+
+El frontend no adjunta `Authorization` a las llamadas de páginas; por tanto, la protección real de Caja/Contabilidad depende de una cabecera que la web no envía o del bypass `x-user-id`. El `AuthProvider` solo demuestra que hay una sesión en el navegador, no que la API vaya a aceptar sus peticiones.
+
 ---
 
 ## 9. Pruebas y su función como evidencia
@@ -720,11 +753,11 @@ La prueba `Nomina.test.tsx` deja expuesta esta carrera: el POST mockeado devuelv
 | Unit of Work | `apps/api/src/shared/db/unit-of-work.test.ts` |
 | Outbox | Cubierto indirectamente por Unit of Work; falta worker/retry |
 | Chain de Nómina | `modules/nomina/cadena-liquidacion.test.ts`, `modules/nomina/cadena/*.test.ts`, `nomina.routes.test.ts` |
-| Proxy | Sin evidencia porque no existe implementación |
+| Proxy | `apps/api/src/modules/auth/permisos.proxy.test.ts` y `apps/api/src/modules/inventario/cache.proxy.test.ts`; evidencia unitaria, sin integración HTTP |
 
 ### 9.3 Cobertura frontend
 
-Existen pruebas de las páginas de Ventas/Citas/Clientes, navegación, tipos, formato y los dashboards de Contabilidad y Nómina. La prueba de Nómina tiene dos casos: el render pasa, pero el cálculo falla de forma reproducible por la carrera POST/GET descrita en [8.5](#85-cálculo-web-de-nómina-carrera-entre-post-y-get).
+Existen pruebas de las páginas de Ventas/Citas/Clientes, navegación, tipos, formato y los dashboards de Contabilidad y Nómina. La prueba de Nómina tiene dos casos: el render pasa, pero el cálculo falla de forma reproducible por la carrera POST/GET descrita en [8.5](#85-cálculo-web-de-nómina-carrera-entre-post-y-get). La nueva guarda de autenticación no está preparada en las pruebas: las 20 pruebas de `App.test.tsx` renderizan el login sin sesión y no encuentran los enlaces o botones esperados. No hay pruebas del formulario `Login`, del hook `useAuth` ni de la integración de los Proxy con rutas.
 
 ---
 
@@ -733,7 +766,12 @@ Existen pruebas de las páginas de Ventas/Citas/Clientes, navegación, tipos, fo
 | Prioridad | Hallazgo | Impacto |
 |---|---|---|
 | P0 | La cadena de Nómina no está conectada en `app.ts`. | La API productiva calcula totales en cero aunque las pruebas unitarias de la cadena sean correctas. |
-| P0 | La puerta de calidad no está verde: 1 prueba y 13 reglas de ESLint fallan. | La rama no cumple la regla de cerrar con `test`, `typecheck`, `lint` y `build` en verde. |
+| P0 | La puerta de calidad no está verde: 21 pruebas y 30 reglas de ESLint fallan. | La rama no cumple la regla de cerrar con `test`, `typecheck`, `lint` y `build` en verde. |
+| P0 | La guarda de rutas web no tiene un estado autenticado en las pruebas existentes. | 20 pruebas de `App.test.tsx` quedan en `/login` y fallan por elementos ausentes. |
+| P0 | `x-user-id` es un bypass de autenticación y asigna roles fijos (`cajero` en Caja, `contador` en Contabilidad). | Cualquier cliente puede entrar sin JWT y obtener un rol distinto del real. |
+| P0 | `POST /api/auth/registro` es público y acepta el rol `admin`. | Cualquiera puede crearse una cuenta administrativa sin autenticarse. |
+| P1 | `PermisosProxy` y `CacheProxy` no están cableados. | El criterio “cajero anulando venta → 403” y “segunda lectura del catálogo no consulta la base” no están demostrados ni activos. |
+| P1 | El JWT usa un secreto fijo y el middleware valida la firma, pero no consulta la sesión persistida. | Un token emitido no se puede revocar desde `sesiones`; el secreto de desarrollo no es apto para producción. |
 | P1 | La página de Nómina coordina POST y GET en paralelo sobre el mismo estado. | El listado puede borrar el resultado calculado; el caso web falla de forma reproducible. |
 | P1 | `NominaRepository` fabrica `netoAPagar` como `salarioBase * 0.9` al listar y consultar. | La API no devuelve el neto persistido y la aserción positiva de la prueba queda enmascarada. |
 | P1 | `PedidoPagado.items` es opcional y el Facade no lo publica. | Contabilidad no puede mostrar productos/servicios; `productosServicios` siempre queda vacío. |
@@ -751,7 +789,7 @@ Existen pruebas de las páginas de Ventas/Citas/Clientes, navegación, tipos, fo
 | P1 | Nómina no persiste detalle ni toma salario y conceptos desde el catálogo/empleado. | No se puede reconstruir una liquidación histórica completa desde la API. |
 | P1 | La prevalidación de duplicado y el insert de Nómina no son una sola transacción. | Una carrera puede terminar en violación de índice y error 500, no en 409 controlado. |
 | P1 | `periodo` de Nómina solo exige texto no vacío y la web pide un UUID manual. | Se aceptan períodos inválidos y el usuario debe conocer el identificador del empleado. |
-| P2 | Proxy, autenticación, roles y caché no existen. | La Fase 8 y el control de permisos del plan siguen pendientes. |
+| P2 | La caché no tiene invalidación ni se usa en el catálogo real. | Una escritura puede dejar lecturas obsoletas hasta el TTL si se cablea sin estrategia de invalidación. |
 | P2 | Notificaciones solo escriben en una salida inyectada. | No hay bandeja, persistencia de entregas ni endpoint HTTP. |
 | P2 | “Gestión de personal” apunta a `#` en la navegación web. | El frontend no ofrece gestión de empleados aunque exista `GET /api/empleados`. |
 | P2 | Las pruebas de persistencia usan PGlite. | Debe verificarse además el comportamiento real en PostgreSQL 17. |
@@ -765,7 +803,7 @@ Existen pruebas de las páginas de Ventas/Citas/Clientes, navegación, tipos, fo
 
 | Tema | Especificación / plan | Implementación observada |
 |---|---|---|
-| Checklist de fases | `docs/plan.md` marca solo fases 5 y 6. | Hay código de fases 0–7; Fase 7 está parcialmente implementada y Fase 8–9 sigue pendiente. |
+| Checklist de fases | `docs/plan.md` marca solo fases 5 y 6. | Hay código de fases 0–8; Fase 7 y Fase 8 están parcialmente implementadas y Fase 9 sigue incompleta. |
 | Trazabilidad | `docs/patrones.md` conserva un snapshot de fases 5–6 y en una sección presenta Adapter/Nómina como pendientes. | Adapter está implementado; Nómina está parcialmente implementado. |
 | Cadena de Ventas | Incluir caja abierta, cliente y stock. | Solo cliente y stock. |
 | Checkout | Resultado verificable de punta a punta y sin stock parcial. | La unidad de negocio está agrupada en un UoW, pero el stock requiere actualización atómica/condicional y la validación no distingue servicios. |
@@ -777,7 +815,8 @@ Existen pruebas de las páginas de Ventas/Citas/Clientes, navegación, tipos, fo
 | Nómina | Consultar catálogo de conceptos. | No existe `/api/nomina/conceptos`; el catálogo tampoco compone la cadena. |
 | Nómina | Dinero en centavos enteros. | La implementación usa `number` en pesos y redondeo decimal en algunos eslabones. |
 | Nómina frontend | Página `/nomina`, hook y pruebas web. | Existen y están montados; el hook no se consume, falta cargar empleados/catálogo y la prueba de cálculo falla por la carrera POST/GET. |
-| Proxy | Permisos y caché con pruebas. | No existen. |
+| Proxy | Permisos y caché con pruebas e integración. | Las clases y pruebas unitarias existen, pero no hay integración con rutas ni se cumple el criterio de aceptación del plan. |
+| Seguridad | Roles admin/cajero/contador y sesiones. | Login, seed y guard web existen; solo Caja y Contabilidad están protegidas, el bypass `x-user-id` sigue activo y las sesiones no se consultan al autorizar. |
 
 ---
 
@@ -788,9 +827,10 @@ Existen pruebas de las páginas de Ventas/Citas/Clientes, navegación, tipos, fo
 1. Conectar en `app.ts` los cinco eslabones de Nómina mediante una función de composition explícita.
 2. Hacer que `NominaRepository` lea `neto_a_pagar` y cambiar la prueba API para afirmar valores conocidos (`1.693.250`, `120.000`, `1.573.250`), no solo la consistencia entre campos ni un neto fabricado.
 3. Serializar el cálculo y el listado de `/nomina`, o hacer que el GET incorpore el resultado sin sobrescribirlo; corregir la prueba web que falla.
-4. Resolver los 4 errores de lint en fuentes de Contabilidad y excluir del alcance de ESLint el runner generado `.gitnexus/run.cjs`, que añade 9 errores `no-undef`.
-5. Ejecutar de nuevo `pnpm test`, `pnpm typecheck`, `pnpm lint` y `pnpm build`; corregir todo error antes de cerrar la fase.
-6. Revisar la migración `0009_nomina` antes de aplicarla en un entorno con datos: los importes están como `text`, no como `numeric`, y no existe la columna de detalle prevista.
+4. Preparar la autenticación en `App.test.tsx` (sesión o mock explícito) para recuperar las 20 pruebas, y resolver los 30 errores de lint de Fase 8 sin ocultarlos con reglas desactivadas.
+5. Eliminar el bypass `x-user-id` fuera de pruebas, conectar un único middleware de autenticación y consultar la sesión persistida para permitir revocación.
+6. Ejecutar de nuevo `pnpm test`, `pnpm typecheck`, `pnpm lint` y `pnpm build`; corregir todo error antes de cerrar la fase.
+7. Revisar la migración `0009_nomina` antes de aplicarla en un entorno con datos: los importes están como `text`, no como `numeric`, y no existe la columna de detalle prevista.
 
 ### P1 — completar las integraciones existentes
 
@@ -805,7 +845,7 @@ Existen pruebas de las páginas de Ventas/Citas/Clientes, navegación, tipos, fo
 
 ### P2 — completar el producto y la exposición
 
-1. Implementar autenticación básica, roles, `PermisosProxy` y `CacheProxy`.
+1. Cablear `PermisosProxy` sobre las operaciones sensibles (incluida la anulación de venta), aplicar `CacheProxy` al catálogo con invalidación y añadir pruebas HTTP de ambos criterios de aceptación.
 2. Ejecutar migraciones up/down y seed repetible contra PostgreSQL Docker, además de PGlite.
 3. Consolidar un guion de demo por patrón con el flujo real y sus limitaciones honestas.
 4. Convertir este documento en el resumen vivo y dejar `docs/patrones.md` como historial fechado o convertirlo gradualmente en el documento final de exposición.
@@ -832,25 +872,26 @@ pnpm build
 
 ### 13.2 Resultado de la corrida de corte
 
-La corrida final, ejecutada sobre `fa986b5`, produjo:
+La corrida de este corte, ejecutada sobre `05cbde1` en un worktree aislado, produjo:
 
 | Comando | Resultado observado |
 |---|---|
-| `pnpm test` | **Falla:** 42 archivos; 232 pruebas; 231 pasan y **1 falla** en `Nomina.test.tsx` (`calcula liquidación y muestra el resultado`). Una ejecución aislada del mismo archivo reproduce el fallo. |
-| `pnpm typecheck` | Correcto. |
-| `pnpm build` | Correcto: compila API y bundle web. |
-| `pnpm lint` | **Falla:** 13 errores y 1 warning. 9 errores `no-undef` corresponden al runner generado y excluido `.gitnexus/run.cjs`; en fuentes hay 4 errores y 1 warning, todos en Contabilidad. |
+| `pnpm test` | **Falla:** 44 archivos; 243 pruebas; 222 pasan y **21 fallan**. 20 fallos están en `App.test.tsx` porque la guarda muestra `/login` sin sesión; el otro es el fallo ya conocido de `Nomina.test.tsx` (`calcula liquidación y muestra el resultado`). |
+| `pnpm typecheck` | Correcto (`tsc --noEmit`, salida 0). |
+| `pnpm build` | Correcto por componentes: `tsc -p apps/api/tsconfig.build.json` y `vite build` de web. El comando raíz `pnpm build` no se pudo ejecutar en el worktree aislado por `ERR_PNPM_UNSAFE_TASK_RUN_STATE_PATH` sobre el `node_modules` enlazado; no fue un error de compilación. |
+| `pnpm lint` | **Falla:** 30 errores y 2 warnings. 26 errores son de Fase 8 (`app.ts`, ambos Proxy y sus pruebas, `Layout.tsx`, `useAuth.tsx` y `Login.tsx`); los 4 restantes y los 2 warnings pertenecen a Contabilidad. |
 
-> `pnpm exec eslint apps` confirma el estado de las fuentes: 4 errores y 1 warning. La rama todavía no cumple la puerta verde exigida por `AGENTS.md`; no debe marcarse la fase 7 como cerrada hasta corregir el test web, el lint y los defectos de integración indicados arriba.
+> El corte anterior `fa986b5` tenía 42 archivos, 232 pruebas, 1 fallo y 13 errores de lint. Esos resultados no describen `05cbde1`: la Fase 8 añadió 2 archivos de prueba, 11 pruebas, 20 fallos de integración web y 17 errores de lint adicionales. La rama no cumple la puerta verde de `AGENTS.md`; no debe marcarse la Fase 8 como cerrada.
 
 ### 13.3 Otras comprobaciones realizadas
 
 - Búsqueda de `any` en `apps/**/*.{ts,tsx}`: sin coincidencias.
 - Búsqueda de imports productivos directos entre dominios de negocio: sin coincidencias; la única importación cruzada está en la prueba de integración `modules/fase2.routes.test.ts`.
 - Búsqueda de imports de `modules/` desde `integrations/`: sin coincidencias.
-- Inventario de superficie: 47 endpoints REST contando `/health`, 7 páginas web montadas, 9 pares de migraciones y 17 tablas en el esquema Kysely.
-- GitNexus reindexado en `fa986b5`: 3.314 nodos, 7.123 relaciones, 104 clústeres y 177 flujos. La extensión FTS/BM25 no estuvo disponible, por lo que la consulta semántica de conceptos no produjo rankings. El analizador también informó de 49 puntos de entrada no explorados y 4 recorridos recortados por presupuesto; la ausencia de un flujo en el índice no prueba que el camino no exista.
-- Impacto GitNexus observado: `CadenaLiquidacion` tiene riesgo upstream `MEDIUM` con 25 símbolos afectados; `PosCheckoutFacade`, riesgo `LOW` con 14 símbolos afectados. El cambio de composición de Nómina debe revisarse con una prueba de integración, no solo con pruebas unitarias.
+- La Fase 8 añadió autenticación JWT, `/api/auth/*`, login web, guard de rutas, seed de usuarios y la migración `0010_seguridad_auth`; solo Caja y Contabilidad están protegidas en la API.
+- `app.ts` duplica la lógica de autenticación en dos hooks inline y mantiene `x-user-id` como bypass con roles hardcodeados. `shared/auth/middleware.ts` existe, pero no se registra.
+- La Fase 8 añadió dos archivos de prueba de Proxy y 11 pruebas. Los Proxy pasan sus casos unitarios, pero no hay ninguna prueba HTTP que demuestre los criterios de aceptación del plan.
+- GitNexus **no se reindexó** sobre `05cbde1`: el worktree aislado quedó fuera del acceso permitido para el runner. Los datos anteriores (3.314 nodos, 7.123 relaciones, 104 clústeres y 177 flujos) corresponden a `fa986b5` y no incluyen autenticación ni los Proxy.
 
 ---
 

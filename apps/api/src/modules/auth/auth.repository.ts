@@ -124,4 +124,15 @@ export class AuthRepository {
       .where('usuario_id', '=', usuarioId)
       .execute();
   }
+
+  async listarUsuarios(rol?: string): Promise<Usuario[]> {
+    let query = this.#db.selectFrom('usuarios').selectAll();
+
+    if (rol) {
+      query = query.where('rol', '=', rol);
+    }
+
+    const rows = await query.execute();
+    return rows.map((row) => mapUsuario(row as unknown as UsuarioRow));
+  }
 }

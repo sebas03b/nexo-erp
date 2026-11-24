@@ -60,5 +60,20 @@ export const authRoutes: FastifyPluginCallback<AuthRoutesOptions> = (
     },
   );
 
+  app.get<{ Querystring?: { rol?: string } }>(
+    '/api/usuarios',
+    async (request, reply) => {
+      const { rol } = request.query;
+      const usuarios = await service.listarUsuarios(rol);
+      return reply.code(200).send(
+        usuarios.map((u) => ({
+          id: u.id,
+          nombre: u.nombre,
+          rol: u.rol,
+        })),
+      );
+    },
+  );
+
   done();
 };
