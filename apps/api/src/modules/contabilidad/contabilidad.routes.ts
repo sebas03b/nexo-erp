@@ -19,7 +19,7 @@ export const contabilidadRoutes: FastifyPluginCallback<ContabilidadRoutesOptions
   done,
 ) => {
   app.get<{ Querystring: { desde?: string; hasta?: string } }>(
-    '/api/contabilidad/asientos',
+    '/asientos',
     async (request, reply) => {
       const { desde, hasta } = request.query;
       const asientos = await service.listarAsientos(desde, hasta);
@@ -28,7 +28,7 @@ export const contabilidadRoutes: FastifyPluginCallback<ContabilidadRoutesOptions
   );
 
   app.get<{ Querystring: { desde?: string; hasta?: string; agrupacion?: string } }>(
-    '/api/contabilidad/reporte-ventas',
+    '/reporte-ventas',
     async (request, reply) => {
       const params = reporteVentasSchema.parse(request.query);
       const resumen = await service.resumenVentas(

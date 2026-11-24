@@ -3,6 +3,7 @@
 // luego inserta datos semilla realistas para probar el POS.
 
 import { createDatabase } from '../shared/db/database.js';
+import { hashPassword } from '../shared/auth/password.js';
 
 const db = createDatabase();
 
@@ -62,6 +63,12 @@ const CONCEPTOS_NOMINA = [
   { codigo: 'PENSION', nombre: 'Pensión (4%)', tipo: 'deduccion' as const, activo: true },
 ];
 
+const USUARIOS_SEED = [
+  { nombre: 'admin', rol: 'admin', password: 'admin123' },
+  { nombre: 'cajero1', rol: 'cajero', password: 'cajero123' },
+  { nombre: 'contador1', rol: 'contador', password: 'contador123' },
+];
+
 const PRODUCTOS = [
   { sku: 'BEL-001', nombre: 'Shampoo Kérastase Nutritive 250ml', precio: 129900, tipo: 'producto' },
   { sku: 'BEL-002', nombre: 'Mascarilla Capilar Olaplex N°3 100ml', precio: 149900, tipo: 'producto' },
@@ -93,6 +100,8 @@ async function main(): Promise<void> {
     await db.deleteFrom('citas').execute();
     await db.deleteFrom('asientos').execute();
     await db.deleteFrom('cajas').execute();
+    await db.deleteFrom('sesiones').execute();
+    await db.deleteFrom('usuarios').execute();
     await db.deleteFrom('liquidaciones').execute();
     await db.deleteFrom('conceptos_nomina').execute();
     await db.deleteFrom('empleados').execute();
@@ -132,6 +141,26 @@ async function main(): Promise<void> {
 
     for (const empleado of empleadosInsertados) {
       console.log(`   - ${empleado.nombre}`);
+    }
+
+    console.log('Insertando usuarios…');
+
+    const usuariosConHash = await Promise.all(
+      USUARIOS_SEED.map(async (u) => ({
+        nombre: u.nombre,
+        rol: u.rol,
+        hash_password: await hashPassword(u.password),
+      })),
+    );
+
+    const usuariosInsertados = await db
+      .insertInto('usuarios')
+      .values(usuariosConHash)
+      .returning(['id', 'nombre', 'rol'])
+      .execute();
+
+    for (const usuario of usuariosInsertados) {
+      console.log(`   - ${usuario.nombre} (${usuario.rol})`);
     }
 
     console.log('Insertando conceptos de nómina…');

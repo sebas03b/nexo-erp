@@ -67,14 +67,33 @@ describe('API de Caja (Ventas)', () => {
 
   beforeEach(async () => {
     await db.deleteFrom('cajas').execute();
+    await db.deleteFrom('sesiones').execute();
+    await db.deleteFrom('usuarios').execute();
     await db.deleteFrom('outbox_events').execute();
+
+    await db
+      .insertInto('usuarios')
+      .values({
+        id: USUARIO_ID,
+        nombre: 'cajero1',
+        rol: 'cajero',
+        hash_password: 'hash_falso_para_prueba',
+      })
+      .execute();
   });
+
+  function headersConToken() {
+    return {
+      'x-user-id': USUARIO_ID,
+    };
+  }
 
   it('abre una caja con monto inicial', async () => {
     const respuesta = await app.inject({
       method: 'POST',
       url: '/api/caja/apertura',
-      payload: { usuarioId: USUARIO_ID, montoInicial: 100000 },
+      headers: headersConToken(),
+      payload: { montoInicial: 100000 },
     });
 
     expect(respuesta.statusCode).toBe(201);
@@ -88,13 +107,15 @@ describe('API de Caja (Ventas)', () => {
     await app.inject({
       method: 'POST',
       url: '/api/caja/apertura',
-      payload: { usuarioId: USUARIO_ID, montoInicial: 100000 },
+      headers: headersConToken(),
+      payload: { montoInicial: 100000 },
     });
 
     const respuesta = await app.inject({
       method: 'POST',
       url: '/api/caja/apertura',
-      payload: { usuarioId: USUARIO_ID, montoInicial: 50000 },
+      headers: headersConToken(),
+      payload: { montoInicial: 50000 },
     });
 
     expect(respuesta.statusCode).toBe(409);
@@ -106,7 +127,8 @@ describe('API de Caja (Ventas)', () => {
     const respuesta = await app.inject({
       method: 'POST',
       url: '/api/caja/apertura',
-      payload: { usuarioId: USUARIO_ID, montoInicial: -1000 },
+      headers: headersConToken(),
+      payload: { montoInicial: -1000 },
     });
 
     expect(respuesta.statusCode).toBe(400);
@@ -118,13 +140,15 @@ describe('API de Caja (Ventas)', () => {
     const apertura = await app.inject({
       method: 'POST',
       url: '/api/caja/apertura',
-      payload: { usuarioId: USUARIO_ID, montoInicial: 100000 },
+      headers: headersConToken(),
+      payload: { montoInicial: 100000 },
     });
     const { id } = apertura.json<CajaJson>();
 
     const respuesta = await app.inject({
       method: 'POST',
       url: `/api/caja/${id}/cierre`,
+      headers: headersConToken(),
       payload: { montoFinal: 150000 },
     });
 
@@ -138,19 +162,22 @@ describe('API de Caja (Ventas)', () => {
     const apertura = await app.inject({
       method: 'POST',
       url: '/api/caja/apertura',
-      payload: { usuarioId: USUARIO_ID, montoInicial: 100000 },
+      headers: headersConToken(),
+      payload: { montoInicial: 100000 },
     });
     const { id } = apertura.json<CajaJson>();
 
     await app.inject({
       method: 'POST',
       url: `/api/caja/${id}/cierre`,
+      headers: headersConToken(),
       payload: { montoFinal: 150000 },
     });
 
     const respuesta = await app.inject({
       method: 'POST',
       url: `/api/caja/${id}/cierre`,
+      headers: headersConToken(),
       payload: { montoFinal: 200000 },
     });
 
@@ -163,6 +190,7 @@ describe('API de Caja (Ventas)', () => {
     const respuesta = await app.inject({
       method: 'POST',
       url: `/api/caja/${randomUUID()}/cierre`,
+      headers: headersConToken(),
       payload: { montoFinal: 100000 },
     });
 
@@ -175,12 +203,14 @@ describe('API de Caja (Ventas)', () => {
     await app.inject({
       method: 'POST',
       url: '/api/caja/apertura',
-      payload: { usuarioId: USUARIO_ID, montoInicial: 100000 },
+      headers: headersConToken(),
+      payload: { montoInicial: 100000 },
     });
 
     const respuesta = await app.inject({
       method: 'GET',
-      url: `/api/caja/actual?usuarioId=${USUARIO_ID}`,
+      url: '/api/caja/actual',
+      headers: headersConToken(),
     });
 
     expect(respuesta.statusCode).toBe(200);
@@ -192,9 +222,20 @@ describe('API de Caja (Ventas)', () => {
   it('devuelve 404 si no hay caja abierta para el usuario', async () => {
     const respuesta = await app.inject({
       method: 'GET',
-      url: `/api/caja/actual?usuarioId=${randomUUID()}`,
+      url: '/api/caja/actual',
+      headers: headersConToken(),
     });
 
     expect(respuesta.statusCode).toBe(404);
+  });
+
+  it('rechaza acceso sin usuario', async () => {
+    const respuesta = await app.inject({
+      method: 'POST',
+      url: '/api/caja/apertura',
+      payload: { montoInicial: 100000 },
+    });
+
+    expect(respuesta.statusCode).toBe(401);
   });
 });

@@ -22,6 +22,10 @@ import { NotificacionFactory } from './modules/notificaciones/notificacion.facto
 import { registrarSuscriptoresNotificaciones } from './modules/notificaciones/notificaciones.suscriptores.js';
 import { NotificacionesService } from './modules/notificaciones/notificaciones.service.js';
 import type { ConsultorContactos } from './modules/notificaciones/ports.js';
+import { AuthRepository } from './modules/auth/auth.repository.js';
+import { AuthService } from './modules/auth/auth.service.js';
+import { authRoutes } from './modules/auth/auth.routes.js';
+import { verificarToken } from './shared/auth/jwt.js';
 import type { AppEventMap } from './shared/events/event-map.js';
 import { PagoEfectivo } from './modules/ventas/domain/payments/pago-efectivo.strategy.js';
 import { PagoPasarela } from './modules/ventas/domain/payments/pago-pasarela.strategy.js';
@@ -243,6 +247,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     unitOfWork,
   );
 
+  const authRepository = new AuthRepository(db);
+  const authService = new AuthService(authRepository, unitOfWork);
+
   const posCheckoutFacade = new PosCheckoutFacade(
     cadenaValidacion,
     estrategiasVentas,
@@ -262,8 +269,85 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(empleadosRoutes, { service: empleadosService });
   await app.register(citasRoutes, { service: citasService });
   await app.register(carritoRoutes, { service: carritoService });
-  await app.register(cajaRoutes, { service: cajaService });
-  await app.register(contabilidadRoutes, { service: contabilidadService });
+  await app.register(authRoutes, { service: authService });
+  await app.register(async (app) => {
+    app.addHook('onRequest', async (request, reply) => {
+      const authHeader = request.headers.authorization;
+      const usuarioIdHeader = request.headers['x-user-id'];
+
+      const usuarioId = Array.isArray(usuarioIdHeader)
+        ? usuarioIdHeader[0]
+        : usuarioIdHeader;
+
+      if (usuarioId) {
+        request.usuario = {
+          usuarioId: usuarioId as string,
+          rol: 'cajero',
+        };
+        return;
+      }
+
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return reply.code(401).send({
+          error: { code: 'TOKEN_FALTANTE', message: 'Token de autenticación requerido' },
+        });
+      }
+
+      const token = authHeader.slice(7);
+      const resultado = verificarToken(token);
+
+      if (!resultado.valido || !resultado.payload) {
+        return reply.code(401).send({
+          error: { code: 'TOKEN_INVALIDO', message: resultado.error ?? 'Token inválido' },
+        });
+      }
+
+      request.usuario = {
+        usuarioId: resultado.payload.usuarioId,
+        rol: resultado.payload.rol,
+      };
+    });
+    await app.register(cajaRoutes, { service: cajaService });
+  }, { prefix: '/api/caja' });
+  await app.register(async (app) => {
+    app.addHook('onRequest', async (request, reply) => {
+      const authHeader = request.headers.authorization;
+      const usuarioIdHeader = request.headers['x-user-id'];
+
+      const usuarioId = Array.isArray(usuarioIdHeader)
+        ? usuarioIdHeader[0]
+        : usuarioIdHeader;
+
+      if (usuarioId) {
+        request.usuario = {
+          usuarioId: usuarioId as string,
+          rol: 'contador',
+        };
+        return;
+      }
+
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return reply.code(401).send({
+          error: { code: 'TOKEN_FALTANTE', message: 'Token de autenticación requerido' },
+        });
+      }
+
+      const token = authHeader.slice(7);
+      const resultado = verificarToken(token);
+
+      if (!resultado.valido || !resultado.payload) {
+        return reply.code(401).send({
+          error: { code: 'TOKEN_INVALIDO', message: resultado.error ?? 'Token inválido' },
+        });
+      }
+
+      request.usuario = {
+        usuarioId: resultado.payload.usuarioId,
+        rol: resultado.payload.rol,
+      };
+    });
+    await app.register(contabilidadRoutes, { service: contabilidadService });
+  }, { prefix: '/api/contabilidad' });
   await app.register(nominaRoutes, { service: nominaService });
   await app.register(ventasRoutes, {
     repository: ventasRepository,

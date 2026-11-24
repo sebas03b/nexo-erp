@@ -66,6 +66,12 @@ async function insertarAsiento(
     .execute();
 }
 
+const USUARIO_ID = randomUUID();
+
+const headersConToken = () => ({
+  'x-user-id': USUARIO_ID,
+});
+
 describe('API de Contabilidad', () => {
   let app: FastifyInstance;
   let db: Kysely<Database>;
@@ -99,12 +105,26 @@ describe('API de Contabilidad', () => {
 
   beforeEach(async () => {
     await db.deleteFrom('asientos').execute();
+    await db.deleteFrom('sesiones').execute();
+    await db.deleteFrom('usuarios').execute();
+    await db.deleteFrom('outbox_events').execute();
+
+    await db
+      .insertInto('usuarios')
+      .values({
+        id: USUARIO_ID,
+        nombre: 'contador1',
+        rol: 'contador',
+        hash_password: 'hash_falso_para_prueba',
+      })
+      .execute();
   });
 
   it('listar asientos vacío al inicio', async () => {
     const respuesta = await app.inject({
       method: 'GET',
       url: '/api/contabilidad/asientos',
+      headers: headersConToken(),
     });
 
     expect(respuesta.statusCode).toBe(200);
@@ -120,6 +140,7 @@ describe('API de Contabilidad', () => {
     const respuesta = await app.inject({
       method: 'GET',
       url: '/api/contabilidad/asientos',
+      headers: headersConToken(),
     });
 
     expect(respuesta.statusCode).toBe(200);
@@ -137,15 +158,13 @@ describe('API de Contabilidad', () => {
   });
 
   it('reporte de ventas agrupado por día', async () => {
-    const origen1 = randomUUID();
-    const origen2 = randomUUID();
-
-    await insertarAsiento(db, 'INGRESOS_VENTAS', 0, 100000, origen1, 'efectivo', '2026-11-25T10:00:00.000Z');
-    await insertarAsiento(db, 'INGRESOS_VENTAS', 0, 200000, origen2, 'pasarela', '2026-11-25T11:00:00.000Z');
+    await insertarAsiento(db, 'INGRESOS_VENTAS', 0, 100000, randomUUID(), 'efectivo', '2026-11-25T10:00:00.000Z');
+    await insertarAsiento(db, 'INGRESOS_VENTAS', 0, 200000, randomUUID(), 'pasarela', '2026-11-25T11:00:00.000Z');
 
     const respuesta = await app.inject({
       method: 'GET',
       url: '/api/contabilidad/reporte-ventas?agrupacion=dia',
+      headers: headersConToken(),
     });
 
     expect(respuesta.statusCode).toBe(200);
@@ -165,6 +184,7 @@ describe('API de Contabilidad', () => {
     const respuesta = await app.inject({
       method: 'GET',
       url: '/api/contabilidad/reporte-ventas?agrupacion=medio_pago',
+      headers: headersConToken(),
     });
 
     expect(respuesta.statusCode).toBe(200);
@@ -178,6 +198,7 @@ describe('API de Contabilidad', () => {
     const respuesta = await app.inject({
       method: 'GET',
       url: '/api/contabilidad/reporte-ventas',
+      headers: headersConToken(),
     });
 
     expect(respuesta.statusCode).toBe(200);
@@ -186,5 +207,14 @@ describe('API de Contabilidad', () => {
     expect(body.cantidadVentas).toBe(0);
     expect(body.datos).toEqual([]);
     expect(body.productosServicios).toEqual([]);
+  });
+
+  it('rechaza acceso sin autenticación', async () => {
+    const respuesta = await app.inject({
+      method: 'GET',
+      url: '/api/contabilidad/asientos',
+    });
+
+    expect(respuesta.statusCode).toBe(401);
   });
 });

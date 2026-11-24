@@ -9,6 +9,14 @@ export interface UsuariosTable {
   hash_password: string;
 }
 
+export interface SesionesTable {
+  id: Generated<string>;
+  usuario_id: string;
+  token_hash: string;
+  expira_en: Generated<Date>;
+  creado_en: Generated<Date>;
+}
+
 export interface ClientesTable {
   id: Generated<string>;
   nombre: string;
@@ -163,6 +171,7 @@ export interface AsientosTable {
 
 export interface Database {
   usuarios: UsuariosTable;
+  sesiones: SesionesTable;
   clientes: ClientesTable;
   outbox_events: OutboxEventsTable;
   productos: ProductosTable;

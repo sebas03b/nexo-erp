@@ -24,6 +24,7 @@ describe('SqlFileMigrationProvider', () => {
       '0007_cajas',
       '0008_contabilidad',
       '0009_nomina',
+      '0010_seguridad_auth',
     ]);
     expect(typeof migrations['0002_outbox_events']?.up).toBe('function');
     expect(typeof migrations['0002_outbox_events']?.down).toBe('function');
@@ -41,5 +42,7 @@ describe('SqlFileMigrationProvider', () => {
     expect(typeof migrations['0008_contabilidad']?.down).toBe('function');
     expect(typeof migrations['0009_nomina']?.up).toBe('function');
     expect(typeof migrations['0009_nomina']?.down).toBe('function');
+    expect(typeof migrations['0010_seguridad_auth']?.up).toBe('function');
+    expect(typeof migrations['0010_seguridad_auth']?.down).toBe('function');
   });
 });

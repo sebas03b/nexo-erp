@@ -9,6 +9,7 @@
 | Fecha de corte | 2026-11-24 |
 | Rama | `feat/fase7-nomina-api` |
 | Commit base | `fa986b5b3964b0dfd778c102f0b9c415d3037746` |
+| Relación con `main` | `main` permanece en `59439c2`; la rama está 7 commits por delante, por lo que las fases 6 y 7 todavía no están integradas en `main` |
 | Objeto observado | Commit `fa986b5`; el árbol solo contenía al final los cambios documentales de `README.md` y este archivo, sin cambios de aplicación |
 | GitNexus | Índice del commit `fa986b5`: 3.314 nodos, 7.123 relaciones, 104 clústeres y 177 flujos |
 | Alcance | Backend Fastify, frontend React, persistencia Kysely/PostgreSQL, pruebas Vitest |
@@ -194,7 +195,7 @@ Los errores 500 se registran en el log de Fastify; los errores de negocio no se 
 - Existen cinco eslabones: salario base, horas extras, auxilio de transporte, salud y pensión.
 - El catálogo `conceptos_nomina` y la tabla `liquidaciones` están migrados y tipados; la API expone cálculo, listado y consulta por ID.
 - `NominaService` calcula totales, verifica empleado y periodo, e inserta la liquidación.
-- La cadena usada por el servicio es una instancia vacía en el composition root actual; véase [Cadena de Responsabilidad de Nómina](#715-chain-of-responsibility-de-nomina).
+- La cadena usada por el servicio es una instancia vacía en el composition root actual; véase [Cadena de Responsabilidad de Nómina](#715-chain-of-responsibility-de-nómina).
 - La web incluye tipos, `useNomina`, página `/nomina`, ruta y enlace de navegación. La página no consume el hook, no carga el catálogo y coordina mal el cálculo con el listado.
 
 ---
@@ -333,6 +334,7 @@ liquidaciones
 - `asientos`: `UNIQUE (origen_id, cuenta)` evita duplicados por reentrega del evento.
 - `liquidaciones`: `UNIQUE (empleado_id, periodo)` evita dos liquidaciones del mismo periodo.
 - `carrito_comandos`: conserva payload, estado anterior, ítem removido y marca `deshecho`.
+- No existe tabla `pagos`; el resultado de la Strategy solo se mantiene en memoria y se replica parcialmente en el evento.
 - Los módulos de negocio no comparten foreign keys de dominio; por ejemplo, `asientos.origen_id` no referencia `pedidos`.
 
 ### 6.4 Seed de demostración
@@ -389,7 +391,9 @@ POST /api/ventas/checkout
 → intenta guardar el XML externo; el destino `jsonb` no admite XML crudo
 ```
 
-**Evidencia:** `apps/api/src/modules/ventas/pos/pos-checkout.facade.test.ts` comprueba pedido pagado, factura emitida, pago, stock descontado y evento `PedidoPagado`.
+**Evidencia:** `apps/api/src/modules/ventas/pos/pos-checkout.facade.test.ts` comprueba pedido pagado, factura emitida, pago, stock descontado y evento `PedidoPagado`. La prueba usa repositorios y Unit of Work simulados; no demuestra rollback real en PostgreSQL, persistencia del pago ni persistencia del payload externo.
+
+El resultado de la Strategy de pago se usa para publicar `PedidoPagado`, pero no se persiste en una tabla de pagos: no existe `pagos` en el esquema y el checkout no conserva de forma independiente monto, método y referencia de la operación.
 
 **Límites:** el test usa un repositorio simulado que no implementa `actualizarPayloadExterno`; el error queda absorbido por el `try/catch` best-effort. Por tanto, la prueba actual no demuestra la persistencia real de `payload_externo`.
 
@@ -531,7 +535,7 @@ Cada módulo de datos expone una clase Repository que encapsula Kysely. Hay repo
 
 **Ventajas observadas:** los servicios no contienen SQL; las transacciones pueden recibir un `executor`; eldominio no depende de PostgreSQL.
 
-**Límites:** no todos los repositorios siguen exactamente la misma frontera. Por ejemplo, `NominaService` consulta e inserta directamente mediante `unitOfWork.db`, mientras que también recibe `NominaRepository`; esto deja el patrón de Repository inconsistente en Nómina. `NominaRepository.crearLiquidacion()` no tiene consumidor, y sus métodos de lectura fabrican `netoAPagar` en vez de mapear `neto_a_pagar`.
+**Límites:** no todos los repositorios siguen exactamente la misma frontera. Por ejemplo, `NominaService` consulta e inserta directamente mediante `unitOfWork.db`, mientras que también recibe `NominaRepository`; esto deja el patrón de Repository inconsistente en Nómina. `NominaRepository.crearLiquidacion()` no tiene consumidor, y sus métodos de lectura fabrican `netoAPagar` en vez de mapear `neto_a_pagar`. `carrito.repository.ts` además comienza con `// Patrón: Command` aunque su responsabilidad principal es persistencia, por lo que la convención de un patrón por archivo no es uniforme.
 
 ### 7.13 Unit of Work — no GoF
 
@@ -622,6 +626,8 @@ Usuario web
 ```
 
 El stock se vuelve a leer dentro de la transacción, pero el `SELECT` y el `UPDATE` no son una operación atómica condicional. Dos checkouts concurrentes todavía pueden competir por el mismo stock; la protección definitiva requiere `UPDATE ... WHERE cantidad >= ?`, bloqueo pesimista o una política de/versionado de stock.
+
+El cierre del carrito tampoco es compare-and-set: `CarritoRepository.actualizarEstado` solo filtra por ID y no exige que el estado previo sea `Abierto`. Dos requests concurrentes pueden observar el mismo carrito abierto, pagar y crear dos pedidos. El checkout tampoco recibe una clave de idempotencia de negocio.
 
 ### 8.2 Confirmación de cita
 
@@ -731,12 +737,15 @@ Existen pruebas de las páginas de Ventas/Citas/Clientes, navegación, tipos, fo
 | P1 | La página de Nómina coordina POST y GET en paralelo sobre el mismo estado. | El listado puede borrar el resultado calculado; el caso web falla de forma reproducible. |
 | P1 | `NominaRepository` fabrica `netoAPagar` como `salarioBase * 0.9` al listar y consultar. | La API no devuelve el neto persistido y la aserción positiva de la prueba queda enmascarada. |
 | P1 | `PedidoPagado.items` es opcional y el Facade no lo publica. | Contabilidad no puede mostrar productos/servicios; `productosServicios` siempre queda vacío. |
+| P1 | No hay prueba directa del suscriptor contable. | La idempotencia reactiva y el aislamiento de fallos del Observer no están demostrados de extremo a extremo. |
 | P1 | El Adapter entrega XML crudo a una columna `jsonb` y oculta el error con `catch {}`. | La persistencia externa es incompatible con el esquema y no hay estado/CUFE, rechazo ni reintento auditables. |
 | P1 | El cierre de caja web usa un input oculto para inicializar el ID. | El usuario puede abrir una caja, pero el botón de cierre no llega a la API. |
 | P1 | Los filtros web de Contabilidad envían `YYYY-MM-DD`, pero el reporte exige fecha-hora ISO. | Consultar el reporte con una fecha de la interfaz devuelve 400. |
 | P1 | No hay worker de Outbox ni actualización de `procesado_en` en el flujo productivo. | Un evento persistido puede no entregarse después de reiniciar el proceso. |
 | P1 | El checkout no valida caja abierta. | Una venta puede completarse sin una caja operativa. |
 | P1 | El descuento de stock usa lectura seguida de escritura. | Existe una ventana de carrera entre checkouts concurrentes. |
+| P1 | El checkout cierra el carrito sin compare-and-set y no tiene clave de idempotencia. | Dos requests concurrentes pueden crear dos pedidos para el mismo carrito. |
+| P1 | El pago no se persiste en una tabla. | No existe registro durable de monto, método y referencia del cobro. |
 | P1 | La validación de stock exige existencias para servicios, pero el seed solo crea stock para productos físicos. | Los cuatro servicios del seed no pueden pasar el checkout. |
 | P1 | El flujo legacy de Ventas no descuenta stock. | `/api/pedidos` y `/api/ventas/checkout` producen inventarios distintos. |
 | P1 | Nómina no persiste detalle ni toma salario y conceptos desde el catálogo/empleado. | No se puede reconstruir una liquidación histórica completa desde la API. |
@@ -744,9 +753,11 @@ Existen pruebas de las páginas de Ventas/Citas/Clientes, navegación, tipos, fo
 | P1 | `periodo` de Nómina solo exige texto no vacío y la web pide un UUID manual. | Se aceptan períodos inválidos y el usuario debe conocer el identificador del empleado. |
 | P2 | Proxy, autenticación, roles y caché no existen. | La Fase 8 y el control de permisos del plan siguen pendientes. |
 | P2 | Notificaciones solo escriben en una salida inyectada. | No hay bandeja, persistencia de entregas ni endpoint HTTP. |
+| P2 | “Gestión de personal” apunta a `#` en la navegación web. | El frontend no ofrece gestión de empleados aunque exista `GET /api/empleados`. |
 | P2 | Las pruebas de persistencia usan PGlite. | Debe verificarse además el comportamiento real en PostgreSQL 17. |
 | P2 | El seed no tiene una prueba automatizada de repetibilidad. | Una regresión del seed puede detectarse tarde. |
 | P2 | La documentación histórica tiene afirmaciones contradictorias. | `docs/plan.md` y `docs/patrones.md` pueden inducir a un estado incorrecto. |
+| P2 | Los marcadores `// Patrón:` no son uniformes. | `carrito.repository.ts` se etiqueta como Command aunque su responsabilidad principal es persistencia. |
 
 ---
 
@@ -787,7 +798,7 @@ Existen pruebas de las páginas de Ventas/Citas/Clientes, navegación, tipos, fo
 2. Sustituir el input oculto de cierre por el `caja.id` disponible en el estado de la vista y convertir las fechas web a ISO antes de consultar el reporte.
 3. Añadir `adapter-mock.test.ts`, serializar un objeto JSON válido para `payload_externo`, registrar estado/CUFE/error y sustituir el `catch {}` vacío por una auditoría o reintento explícito.
 4. Implementar el lector/worker de Outbox, reintento y actualización de `procesado_en`.
-5. Añadir validación de caja abierta al checkout, hacer atómico el descuento de stock y permitir servicios sin una fila de existencias.
+5. Añadir validación de caja abierta al checkout, hacer atómico el descuento de stock, cerrar el carrito con compare-and-set, incorporar idempotencia, persistir el pago y permitir servicios sin una fila de existencias.
 6. Unificar el flujo legacy con el checkout o retirar/documentar explícitamente su diferencia de inventario.
 7. Llevar el cálculo y persistencia de Nómina al Repository/UoW; persistir detalle, tomar salario del empleado, exponer `/api/nomina/conceptos` y validar `periodo` como `YYYY-MM`.
 8. Integrar `useNomina` o eliminar la lógica duplicada; cargar empleados para evitar exigir un UUID manual.

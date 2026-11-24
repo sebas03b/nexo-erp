@@ -125,8 +125,9 @@ describe('Migración de Citas y Empleados', () => {
         cause: error,
       });
     }
-    // 0009_nomina, 0008_contabilidad y 0007_cajas se aplican después de 0006_citas.
+    // 0010_seguridad_auth, 0009_nomina, 0008_contabilidad y 0007_cajas se aplican después de 0006_citas.
     // migrateDown() revierte una a la vez; revertimos hasta llegar a 0006.
+    await migrator.migrateDown();
     await migrator.migrateDown();
     await migrator.migrateDown();
     await migrator.migrateDown();
