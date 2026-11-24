@@ -1,10 +1,10 @@
 import { useState, type FormEvent, type JSX } from 'react';
+import { FiDelete, FiEdit } from 'react-icons/fi';
 
 import { useCatalogo } from '../hooks/useCatalogo';
 import { eliminarRecurso, enviarJson } from '../lib/api';
 import { formatearMoneda } from '../lib/formato';
 import { claseStock } from '../lib/stock';
-import { FiDelete, FiEdit } from 'react-icons/fi';
 import type { Producto } from '../types';
 
 export function Productos(): JSX.Element {
@@ -20,8 +20,11 @@ export function Productos(): JSX.Element {
   const [modalNuevoProducto, setModalNuevoProducto] = useState<boolean>(false);
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevoPrecio, setNuevoPrecio] = useState('');
-  const [nuevoTipo, setNuevoTipo] = useState('producto');
+  const [nuevoTipo, setNuevoTipo] = useState<'producto' | 'servicio'>('producto');
   const [nuevoSku, setNuevoSku] = useState('');
+
+  const productosFiltrados = productos.filter((p) => p.tipo === 'producto');
+  const serviciosFiltrados = productos.filter((p) => p.tipo === 'servicio');
 
   function abrirEdicion(producto: Producto): void {
     setProductoEditando(producto);
@@ -40,6 +43,15 @@ export function Productos(): JSX.Element {
     setErrorAccion(null);
   }
 
+  function abrirNuevo(tipo: 'producto' | 'servicio'): void {
+    setNuevoNombre('');
+    setNuevoPrecio('');
+    setNuevoTipo(tipo);
+    setNuevoSku('');
+    setErrorAccion(null);
+    setModalNuevoProducto(true);
+  }
+
   async function guardarProducto(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
 
@@ -49,6 +61,7 @@ export function Productos(): JSX.Element {
 
     const nombreNormalizado = nombre.trim();
     const precioNumero = Number(precio);
+    const esServicio = productoEditando.tipo === 'servicio';
     const stockNumero = Number(cantidadStock);
 
     if (nombreNormalizado === '') {
@@ -61,7 +74,7 @@ export function Productos(): JSX.Element {
       return;
     }
 
-    if (!Number.isInteger(stockNumero) || stockNumero < 0) {
+    if (!esServicio && (!Number.isInteger(stockNumero) || stockNumero < 0)) {
       setErrorAccion('El stock debe ser un número entero mayor o igual a 0.');
       return;
     }
@@ -70,14 +83,18 @@ export function Productos(): JSX.Element {
     setErrorAccion(null);
 
     try {
+      const payload: { nombre: string; precio: number; stock?: number } = {
+        nombre: nombreNormalizado,
+        precio: precioNumero,
+      };
+      if (!esServicio) {
+        payload.stock = stockNumero;
+      }
+
       await enviarJson<Producto>(
         `/api/productos/${productoEditando.id}`,
         'PUT',
-        {
-          nombre: nombreNormalizado,
-          precio: precioNumero,
-          stock: stockNumero,
-        },
+        payload,
       );
 
       setProductoEditando(null);
@@ -119,14 +136,27 @@ export function Productos(): JSX.Element {
     }
   }
 
+  function siguienteSkuServicio(): string {
+    let max = 0;
+    for (const p of productos) {
+      if (p.tipo !== 'servicio') continue;
+      const match = /^SRV-(\d+)$/i.exec(p.sku.trim());
+      if (!match) continue;
+      const n = Number(match[1]);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+    return `SRV-${String(max + 1).padStart(3, '0')}`;
+  }
+
   async function crearProductoNuevo(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
 
-    const skuNormalizado = nuevoSku.trim();
     const nombreNormalizado = nuevoNombre.trim();
     const precioNumero = Number(nuevoPrecio);
+    const esServicio = nuevoTipo === 'servicio';
+    const skuNormalizado = esServicio ? siguienteSkuServicio() : nuevoSku.trim();
 
-    if (skuNormalizado === '') {
+    if (!esServicio && skuNormalizado === '') {
       setErrorAccion('Ingresa el SKU del producto.');
       return;
     }
@@ -174,7 +204,6 @@ export function Productos(): JSX.Element {
             Catálogo disponible y existencias registradas para cada producto.
           </p>
         </div>
-
       </header>
 
       {error ? (
@@ -189,101 +218,172 @@ export function Productos(): JSX.Element {
         </p>
       ) : null}
 
-      <section className="app-card" aria-labelledby="inventario-titulo">
-        <div className="seccion-cabecera">
-          <h3 id="inventario-titulo" className="seccion-titulo">
-            Inventario
-          </h3>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="boton-primario boton-compacto"
-              onClick={() => {
-                setNuevoNombre('');
-                setNuevoPrecio('');
-                setNuevoTipo('producto');
-                setNuevoSku('');
-                setModalNuevoProducto(true);
-              }}
-            >
-              Nuevo Producto
-            </button>
-            <button
-              type="button"
-              className="boton-secundario boton-compacto"
-              onClick={recargar}
-              disabled={cargando}
-            >
-              {cargando ? 'Actualizando…' : 'Actualizar'}
-            </button>
+      <div className="space-y-6">
+        <section className="app-card" aria-labelledby="productos-titulo">
+          <div className="seccion-cabecera">
+            <h3 id="productos-titulo" className="seccion-titulo">
+              Productos
+            </h3>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="boton-primario boton-compacto"
+                onClick={() => abrirNuevo('producto')}
+              >
+                Nuevo Producto
+              </button>
+              <button
+                type="button"
+                className="boton-secundario boton-compacto"
+                onClick={recargar}
+                disabled={cargando}
+              >
+                {cargando ? 'Actualizando…' : 'Actualizar'}
+              </button>
+            </div>
           </div>
-        </div>
 
-        {cargando ? (
-          <p className="app-empty">Cargando productos…</p>
-        ) : productos.length === 0 ? (
-          <p className="app-empty">No hay productos registrados.</p>
-        ) : (
-          <div className="tabla-contenedor">
-            <table className="productos-tabla">
-              <thead>
-                <tr>
-                  <th scope="col">SKU</th>
-                  <th scope="col">Nombre</th>
-                  <th scope="col">Tipo</th>
-                  <th scope="col">Precio</th>
-                  <th scope="col">Stock</th>
-                  <th scope="col"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {productos.map((producto) => {
-                  const cantidad = stock[producto.id] ?? 0;
+          {cargando ? (
+            <p className="app-empty">Cargando productos…</p>
+          ) : productosFiltrados.length === 0 ? (
+            <p className="app-empty">No hay productos registrados.</p>
+          ) : (
+            <div className="tabla-contenedor">
+              <table className="productos-tabla">
+                <thead>
+                  <tr>
+                    <th scope="col">SKU</th>
+                    <th scope="col">Nombre</th>
+                    <th scope="col">Precio</th>
+                    <th scope="col">Stock</th>
+                    <th scope="col">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productosFiltrados.map((producto) => {
+                    const cantidad = stock[producto.id] ?? 0;
+                    return (
+                      <tr key={producto.id}>
+                        <td>{producto.sku}</td>
+                        <td>{producto.nombre}</td>
+                        <td>{formatearMoneda(producto.precio)}</td>
+                        <td>
+                          <span className={`stock-badge ${claseStock(cantidad)}`}>
+                            {cantidad}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="acciones-tabla flex justify-center items-center gap-2">
+                            <button
+                              type="button"
+                              className="boton-icono boton-editar"
+                              aria-label={`Editar ${producto.nombre}`}
+                              title="Editar producto"
+                              onClick={() => abrirEdicion(producto)}
+                            >
+                              <FiEdit size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              className="boton-eliminar-icono"
+                              aria-label={`Eliminar ${producto.nombre}`}
+                              title="Eliminar producto"
+                              disabled={eliminandoId === producto.id}
+                              onClick={() => {
+                                void eliminarProducto(producto);
+                              }}
+                            >
+                              {eliminandoId === producto.id ? '…' : <FiDelete size={16} />}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
 
-                  return (
-                    <tr key={producto.id}>
-                      <td>{producto.sku}</td>
-                      <td>{producto.nombre}</td>
-                      <td>{producto.tipo}</td>
-                      <td>{formatearMoneda(producto.precio)}</td>
+        <section className="app-card" aria-labelledby="servicios-titulo">
+          <div className="seccion-cabecera">
+            <h3 id="servicios-titulo" className="seccion-titulo">
+              Servicios
+            </h3>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="boton-primario boton-compacto"
+                onClick={() => abrirNuevo('servicio')}
+              >
+                Nuevo Servicio
+              </button>
+              <button
+                type="button"
+                className="boton-secundario boton-compacto"
+                onClick={recargar}
+                disabled={cargando}
+              >
+                {cargando ? 'Actualizando…' : 'Actualizar'}
+              </button>
+            </div>
+          </div>
+
+          {cargando ? (
+            <p className="app-empty">Cargando servicios…</p>
+          ) : serviciosFiltrados.length === 0 ? (
+            <p className="app-empty">No hay servicios registrados.</p>
+          ) : (
+            <div className="tabla-contenedor">
+              <table className="productos-tabla">
+                <thead>
+                  <tr>
+                    <th scope="col">SKU</th>
+                    <th scope="col">Nombre</th>
+                    <th scope="col">Precio</th>
+                    <th scope="col">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {serviciosFiltrados.map((servicio) => (
+                    <tr key={servicio.id}>
+                      <td>{servicio.sku}</td>
+                      <td>{servicio.nombre}</td>
+                      <td>{formatearMoneda(servicio.precio)}</td>
                       <td>
-                        <span className={`stock-badge ${claseStock(cantidad)}`}>
-                          {cantidad}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="acciones-tabla">
+                        <div className="acciones-tabla flex justify-center items-center gap-2">
                           <button
                             type="button"
                             className="boton-icono boton-editar"
-                            aria-label={`Editar ${producto.nombre}`}
+                            aria-label={`Editar ${servicio.nombre}`}
                             title="Editar producto"
-                            onClick={() => abrirEdicion(producto)}
+                            onClick={() => abrirEdicion(servicio)}
                           >
                             <FiEdit size={16} />
                           </button>
                           <button
                             type="button"
                             className="boton-eliminar-icono"
-                            aria-label={`Eliminar ${producto.nombre}`}
+                            aria-label={`Eliminar ${servicio.nombre}`}
                             title="Eliminar producto"
-                            disabled={eliminandoId === producto.id}
+                            disabled={eliminandoId === servicio.id}
                             onClick={() => {
-                              void eliminarProducto(producto);
+                              void eliminarProducto(servicio);
                             }}
                           >
-                            {eliminandoId === producto.id ? '…' : <FiDelete size={16} />}
+                            {eliminandoId === servicio.id ? '…' : <FiDelete size={16} />}
                           </button>
                         </div>
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
 
       {productoEditando ? (
         <div className="modal-backdrop">
@@ -325,17 +425,19 @@ export function Productos(): JSX.Element {
                 />
               </div>
 
-              <div className="producto-form-campo">
-                <label htmlFor="producto-stock">Stock actual</label>
-                <input
-                  id="producto-stock"
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={cantidadStock}
-                  onChange={(event) => setCantidadStock(event.target.value)}
-                />
-              </div>
+              {productoEditando.tipo === 'servicio' ? null : (
+                <div className="producto-form-campo">
+                  <label htmlFor="producto-stock">Stock actual</label>
+                  <input
+                    id="producto-stock"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={cantidadStock}
+                    onChange={(event) => setCantidadStock(event.target.value)}
+                  />
+                </div>
+              )}
 
               {errorAccion ? (
                 <p role="alert" className="alert alert-error">
@@ -370,7 +472,7 @@ export function Productos(): JSX.Element {
             aria-labelledby="nuevo-producto-titulo"
           >
             <h3 id="nuevo-producto-titulo" className="seccion-titulo">
-              Nuevo Producto
+              {nuevoTipo === 'servicio' ? 'Nuevo Servicio' : 'Nuevo Producto'}
             </h3>
 
             <form
@@ -379,15 +481,17 @@ export function Productos(): JSX.Element {
                 void crearProductoNuevo(event);
               }}
             >
-              <div className="producto-form-campo">
-                <label htmlFor="nuevo-sku">SKU</label>
-                <input
-                  id="nuevo-sku"
-                  type="text"
-                  value={nuevoSku}
-                  onChange={(event) => setNuevoSku(event.target.value)}
-                />
-              </div>
+              {nuevoTipo === 'servicio' ? null : (
+                <div className="producto-form-campo">
+                  <label htmlFor="nuevo-sku">SKU</label>
+                  <input
+                    id="nuevo-sku"
+                    type="text"
+                    value={nuevoSku}
+                    onChange={(event) => setNuevoSku(event.target.value)}
+                  />
+                </div>
+              )}
 
               <div className="producto-form-campo">
                 <label htmlFor="nuevo-nombre">Nombre</label>
@@ -411,17 +515,7 @@ export function Productos(): JSX.Element {
                 />
               </div>
 
-              <div className="producto-form-campo">
-                <label htmlFor="nuevo-tipo">Tipo</label>
-                <select
-                  id="nuevo-tipo"
-                  value={nuevoTipo}
-                  onChange={(event) => setNuevoTipo(event.target.value)}
-                >
-                  <option value="producto">Producto</option>
-                  <option value="servicio">Servicio</option>
-                </select>
-              </div>
+
 
               {errorAccion ? (
                 <p role="alert" className="alert alert-error">
@@ -439,7 +533,7 @@ export function Productos(): JSX.Element {
                   Cancelar
                 </button>
                 <button type="submit" disabled={creandoProducto}>
-                  {creandoProducto ? 'Creando…' : 'Crear producto'}
+                  {creandoProducto ? 'Creando…' : nuevoTipo === 'servicio' ? 'Crear servicio' : 'Crear producto'}
                 </button>
               </div>
             </form>

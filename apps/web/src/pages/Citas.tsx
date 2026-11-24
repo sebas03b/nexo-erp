@@ -70,10 +70,10 @@ export function Citas(): JSX.Element {
               <thead>
                 <tr>
                   <th scope="col">Cliente</th>
-                  <th scope="col">Notas</th>
+                  <th scope="col">Descripcion</th>
                   <th scope="col">Horario</th>
                   <th scope="col">Estado</th>
-                  <th scope="col" className="text-right">Acciones</th>
+                  <th scope="col">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -86,7 +86,7 @@ export function Citas(): JSX.Element {
                       <span className={claseEstado(cita.estado)}>{cita.estado}</span>
                     </td>
                     <td>
-                      <div className="acciones-tabla flex justify-end items-center gap-2">
+                      <div className="acciones-tabla flex justify-center items-center gap-2">
                         <button
                           type="button"
                           className="boton-secundario boton-compacto"

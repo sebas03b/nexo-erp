@@ -303,7 +303,7 @@ h2 {
 
 .citas-tabla th:last-child,
 .citas-tabla td:last-child {
-  text-align: right;
+  text-align: center;
   white-space: nowrap;
 }
 
@@ -744,6 +744,10 @@ button:disabled {
 
 .gap-4 {
   gap: 1rem;
+}
+
+.space-y-6 > * + * {
+  margin-top: 1.5rem;
 }
 
 .seccion-cabecera {
